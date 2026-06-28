@@ -7,7 +7,10 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "L'app utilise ta position pour vérifier si tu es dans ta zone de stationnement riverain."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -16,10 +19,36 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "name": "Riverain BXL",
+      "shortName": "Riverain",
+      "themeColor": "#1FAA59",
+      "backgroundColor": "#ffffff",
+      "display": "standalone",
+      "lang": "fr"
+    },
+    "experiments": {
+      "baseUrl": "/parking-riverain-bxl"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "6d176b7d-767d-47aa-b0d3-bc7ece516e7f"
+      }
+    },
+    "owner": "mhd541",
+    "sdkVersion": "54.0.0",
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/6d176b7d-767d-47aa-b0d3-bc7ece516e7f"
     }
   }
 }
