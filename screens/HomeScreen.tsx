@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { CheckIcon, CrossIcon, LogoutIcon, PinIcon, RefreshIcon } from "../components/icons";
+import { findRegulationZone, RegulationMatch } from "../data/regulationZones";
 import { getZoneById } from "../data/zones";
 import { isPointInPolygon } from "../utils/geo";
 
@@ -28,7 +29,49 @@ type Status =
   | { kind: "loading" }
   | { kind: "permission-denied" }
   | { kind: "error"; message: string }
-  | { kind: "result"; inside: boolean; accuracy: number | null };
+  | { kind: "result"; inside: boolean; accuracy: number | null; regulation: RegulationMatch | null };
+
+const REGULATION_LABELS: Record<string, string> = {
+  rouge: "Zone rouge",
+  bleue: "Zone bleue · disque obligatoire",
+  verte: "Zone verte",
+  grise: "Zone grise",
+  orange: "Zone orange",
+  evenement: "Zone événement",
+  "poids-lourds": "Zone poids-lourds",
+  "reserve-riverain": "Réservé riverains",
+  gratuit: "Stationnement gratuit",
+  inconnu: "Réglementation inconnue",
+};
+
+function regulationSummary(match: RegulationMatch | null): { title: string; body: string } {
+  if (!match) {
+    return {
+      title: "Réglementation inconnue ici",
+      body: "On n'a pas encore de données précises pour cette rue. Vérifie la signalisation sur place.",
+    };
+  }
+  const z = match.zone;
+  const label = REGULATION_LABELS[z.type] ?? z.typeLabel;
+  const prefix = match.exact ? "" : `Rue la plus proche (~${Math.round(match.distanceMeters)} m) · `;
+
+  if (z.type === "gratuit") {
+    return { title: `${prefix}${label}`, body: "Stationnement gratuit, sans carte riverain nécessaire." };
+  }
+  if (z.type === "reserve-riverain") {
+    return { title: `${prefix}${label}`, body: "Réservé aux détenteurs d'une carte riverain de ce secteur." };
+  }
+
+  const parts: string[] = [];
+  if (z.starthour && z.endhour) parts.push(`payant ${z.starthour}–${z.endhour}`);
+  else parts.push("réglementation horaire variable");
+  if (z.type === "bleue") parts.push("disque de stationnement requis");
+  if (z.maxtime) parts.push(`durée max ${z.maxtime} min`);
+  if (z.freetime) parts.push(`${z.freetime} min gratuites`);
+  if (z.fee) parts.push(`tarif ${z.fee} €/h`);
+
+  return { title: `${prefix}${label}`, body: parts.join(" · ") + " (sans carte riverain)." };
+}
 
 const PALETTES = {
   loading: ["#2C2C30", "#15151A"] as const,
@@ -97,11 +140,10 @@ export default function HomeScreen({ zoneId, username, onChangeZone, onLogout }:
         setStatus({ kind: "error", message: "Zone introuvable." });
         return;
       }
-      const inside = isPointInPolygon(
-        { latitude: position.coords.latitude, longitude: position.coords.longitude },
-        zone.polygon
-      );
-      setStatus({ kind: "result", inside, accuracy: position.coords.accuracy ?? null });
+      const coords = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+      const inside = isPointInPolygon(coords, zone.polygon);
+      const regulation = findRegulationZone(coords);
+      setStatus({ kind: "result", inside, accuracy: position.coords.accuracy ?? null, regulation });
       setLastChecked(new Date());
       hapticFeedback(inside ? "success" : "warning");
     } catch (e) {
@@ -226,6 +268,20 @@ export default function HomeScreen({ zoneId, username, onChangeZone, onLogout }:
               )}
             </Animated.View>
           )}
+
+          {isResult &&
+            (() => {
+              const reg = regulationSummary(status.regulation);
+              return (
+                <Animated.View
+                  style={[styles.infoCard, styles.regCard, { opacity: fade, transform: [{ translateY: slideUp }] }]}
+                >
+                  <Text style={styles.regLabel}>Sans carte riverain</Text>
+                  <Text style={[styles.infoTitle, { color: "#1a1a1a" }]}>{reg.title}</Text>
+                  <Text style={styles.infoBody}>{reg.body}</Text>
+                </Animated.View>
+              );
+            })()}
         </View>
 
         <Pressable
@@ -340,6 +396,15 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
   },
   infoTitle: { fontSize: 16, fontFamily: "Manrope_800ExtraBold", marginBottom: 6 },
+  regCard: { backgroundColor: "rgba(255,255,255,0.9)" },
+  regLabel: {
+    fontSize: 10.5,
+    fontFamily: "Manrope_700Bold",
+    color: "#9b9ba1",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    marginBottom: 4,
+  },
   infoBody: { fontSize: 13.5, fontFamily: "Manrope_400Regular", color: "#4a4a4f", lineHeight: 19 },
   infoMetaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 },
   infoMetaDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: "#9b9ba1" },
