@@ -21,11 +21,7 @@ if (Platform.OS !== "web") {
 
 export default function RegulationMap({ position, residentPolygon, regulationPolygons, inside }: Props) {
   if (Platform.OS === "web" || !MapView) {
-    return (
-      <View style={styles.webFallback}>
-        <Text style={styles.webFallbackText}>Carte disponible dans l'app mobile (Expo Go).</Text>
-      </View>
-    );
+    return null;
   }
 
   return (
@@ -64,14 +60,4 @@ export default function RegulationMap({ position, residentPolygon, regulationPol
 const styles = StyleSheet.create({
   wrap: { width: "100%", maxWidth: 340, height: 180, borderRadius: 18, overflow: "hidden" },
   map: { flex: 1 },
-  webFallback: {
-    width: "100%",
-    maxWidth: 340,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.85)",
-    alignItems: "center",
-  },
-  webFallbackText: { fontSize: 12.5, fontFamily: "Manrope_600SemiBold", color: "#777" },
 });

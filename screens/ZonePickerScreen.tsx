@@ -1,4 +1,5 @@
 import { Manrope_400Regular, Manrope_600SemiBold, Manrope_700Bold, Manrope_800ExtraBold } from "@expo-google-fonts/manrope";
+import { BlurView } from "expo-blur";
 import { useFonts } from "expo-font";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -6,6 +7,7 @@ import {
   Easing,
   Image,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,26 +22,19 @@ import { getCollapsedCommunes, setCollapsedCommunes } from "../storage/collapsed
 import { getHiddenCommunes, setHiddenCommunes } from "../storage/hiddenCommunes";
 import { setSelectedZoneId } from "../storage/selectedZone";
 
-type HeaderOverride = {
-  title: string;
-  subtitle: string;
-  onBack: () => void;
-};
-
-type Props = {
-  onZoneSelected: (zoneId: string) => void;
-  headerOverride?: HeaderOverride;
-};
+type HeaderOverride = { title: string; subtitle: string; onBack: () => void };
+type Props = { onZoneSelected: (zoneId: string) => void; headerOverride?: HeaderOverride };
 
 const DRAWER_WIDTH = 300;
+const GREEN = "#22D17E";
+
+function DrawerPanel({ children, style }: { children: React.ReactNode; style?: object }) {
+  if (Platform.OS === "web") return <View style={[styles.drawerWeb, style]}>{children}</View>;
+  return <BlurView intensity={30} tint="dark" style={[styles.drawer, style]}>{children}</BlurView>;
+}
 
 export default function ZonePickerScreen({ onZoneSelected, headerOverride }: Props) {
-  const [fontsLoaded] = useFonts({
-    Manrope_400Regular,
-    Manrope_600SemiBold,
-    Manrope_700Bold,
-    Manrope_800ExtraBold,
-  });
+  const [fontsLoaded] = useFonts({ Manrope_400Regular, Manrope_600SemiBold, Manrope_700Bold, Manrope_800ExtraBold });
   const [query, setQuery] = useState("");
   const [hidden, setHidden] = useState<Set<string> | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -69,8 +64,7 @@ export default function ZonePickerScreen({ onZoneSelected, headerOverride }: Pro
 
   const toggleCollapsed = (commune: string) => {
     const next = new Set(collapsed);
-    if (next.has(commune)) next.delete(commune);
-    else next.add(commune);
+    if (next.has(commune)) next.delete(commune); else next.add(commune);
     setCollapsed(next);
     setCollapsedCommunes(Array.from(next));
   };
@@ -93,27 +87,16 @@ export default function ZonePickerScreen({ onZoneSelected, headerOverride }: Pro
   const toggleCommune = (commune: string) => {
     if (!hidden) return;
     const next = new Set(hidden);
-    if (next.has(commune)) next.delete(commune);
-    else next.add(commune);
+    if (next.has(commune)) next.delete(commune); else next.add(commune);
     setHidden(next);
     setHiddenCommunes(Array.from(next));
   };
 
-  const showAll = () => {
-    setHidden(new Set());
-    setHiddenCommunes([]);
-  };
-
-  const hideAll = () => {
-    const all = new Set(allCommunes);
-    setHidden(all);
-    setHiddenCommunes(Array.from(all));
-  };
+  const showAll = () => { setHidden(new Set()); setHiddenCommunes([]); };
+  const hideAll = () => { const all = new Set(allCommunes); setHidden(all); setHiddenCommunes(Array.from(all)); };
 
   const handleSelect = async (zoneId: string) => {
-    if (!headerOverride) {
-      await setSelectedZoneId(zoneId);
-    }
+    if (!headerOverride) await setSelectedZoneId(zoneId);
     onZoneSelected(zoneId);
   };
 
@@ -132,17 +115,18 @@ export default function ZonePickerScreen({ onZoneSelected, headerOverride }: Pro
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.brandRow}>
         {headerOverride ? (
-          <Pressable style={styles.hamburger} onPress={headerOverride.onBack} hitSlop={10}>
-            <BackIcon size={19} />
+          <Pressable style={styles.iconBtn} onPress={headerOverride.onBack} hitSlop={10}>
+            <BackIcon size={18} color="rgba(255,255,255,0.8)" />
           </Pressable>
         ) : (
-          <Pressable style={styles.hamburger} onPress={openMenu} hitSlop={10}>
-            <MenuIcon size={19} />
+          <Pressable style={styles.iconBtn} onPress={openMenu} hitSlop={10}>
+            <MenuIcon size={18} color="rgba(255,255,255,0.8)" />
             {hiddenCount > 0 && (
-              <View style={styles.hamburgerBadge}>
-                <Text style={styles.hamburgerBadgeText}>{hiddenCount}</Text>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{hiddenCount}</Text>
               </View>
             )}
           </Pressable>
@@ -151,20 +135,18 @@ export default function ZonePickerScreen({ onZoneSelected, headerOverride }: Pro
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>{headerOverride?.title ?? "Riverain BXL"}</Text>
           <Text style={styles.subtitle}>
-            {headerOverride?.subtitle ??
-              `${totalZonesVisible} zone${totalZonesVisible !== 1 ? "s" : ""} disponible${totalZonesVisible !== 1 ? "s" : ""}`}
+            {headerOverride?.subtitle ?? `${totalZonesVisible} zone${totalZonesVisible !== 1 ? "s" : ""} disponible${totalZonesVisible !== 1 ? "s" : ""}`}
           </Text>
         </View>
       </View>
 
+      {/* Search */}
       <View style={styles.searchWrap}>
-        <View style={styles.searchIconWrap}>
-          <SearchIcon size={16} />
-        </View>
+        <View style={styles.searchIcon}><SearchIcon size={15} color="rgba(255,255,255,0.35)" /></View>
         <TextInput
           style={styles.search}
-          placeholder="Rechercher une commune ou une zone..."
-          placeholderTextColor="#9b9ba1"
+          placeholder="Rechercher une commune ou une zone…"
+          placeholderTextColor="rgba(255,255,255,0.28)"
           value={query}
           onChangeText={setQuery}
           autoCorrect={false}
@@ -172,6 +154,7 @@ export default function ZonePickerScreen({ onZoneSelected, headerOverride }: Pro
         />
       </View>
 
+      {/* List */}
       {hidden === null ? null : visibleCommunes.length === 0 ? (
         <View style={styles.emptyWrap}>
           <Text style={styles.emptyEmoji}>{hiddenCount > 0 ? "🙈" : "🔎"}</Text>
@@ -179,82 +162,87 @@ export default function ZonePickerScreen({ onZoneSelected, headerOverride }: Pro
             {hiddenCount > 0 ? "Toutes les communes sont masquées." : "Aucune zone ne correspond à ta recherche."}
           </Text>
           {hiddenCount > 0 && (
-            <Pressable style={styles.emptyAction} onPress={showAll}>
-              <Text style={styles.emptyActionText}>Tout réafficher</Text>
+            <Pressable style={styles.emptyBtn} onPress={showAll}>
+              <Text style={styles.emptyBtnText}>Tout réafficher</Text>
             </Pressable>
           )}
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {visibleCommunes.map((commune) => {
             const isOpen = !collapsed.has(commune);
             const zones = zonesByCommune.get(commune) ?? [];
             return (
               <View key={commune}>
                 <Pressable
-                  style={({ pressed }) => [styles.sectionHeaderRow, pressed && styles.sectionHeaderRowPressed]}
+                  style={({ pressed }) => [styles.communeRow, pressed && { opacity: 0.6 }]}
                   onPress={() => toggleCollapsed(commune)}
                 >
-                  <Text style={styles.sectionHeader}>{commune}</Text>
-                  <View style={{ transform: [{ rotate: isOpen ? "90deg" : "0deg" }] }}>
-                    <ChevronIcon size={14} color="#1FAA59" />
-                  </View>
+                  <Text style={styles.communeName}>{commune}</Text>
+                  <Animated.View style={{ transform: [{ rotate: isOpen ? "90deg" : "0deg" }] }}>
+                    <ChevronIcon size={13} color={GREEN} />
+                  </Animated.View>
                 </Pressable>
-                {isOpen &&
-                  zones.map((item) => (
-                    <Pressable
-                      key={item.id}
-                      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-                      onPress={() => handleSelect(item.id)}
-                    >
-                      <View style={styles.cardDot} />
-                      <Text style={styles.cardZone}>{item.name}</Text>
-                      <ChevronIcon size={15} />
-                    </Pressable>
-                  ))}
+                {isOpen && zones.map((item) => (
+                  <Pressable
+                    key={item.id}
+                    style={({ pressed }) => [styles.zoneRow, pressed && styles.zoneRowPressed]}
+                    onPress={() => handleSelect(item.id)}
+                  >
+                    <View style={styles.zoneDot} />
+                    <Text style={styles.zoneName}>{item.name}</Text>
+                    <ChevronIcon size={14} color="rgba(255,255,255,0.3)" />
+                  </Pressable>
+                ))}
               </View>
             );
           })}
         </ScrollView>
       )}
 
+      {/* Drawer */}
       <Modal visible={menuVisible} transparent animationType="none" onRequestClose={closeMenu}>
         <Animated.View style={[styles.modalOverlay, { opacity: backdropOpacity }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={closeMenu} />
         </Animated.View>
-        <Animated.View style={[styles.menuPanel, { transform: [{ translateX: drawerX }] }]}>
-          <View style={styles.menuHeader}>
-            <Text style={styles.menuTitle}>Communes</Text>
-            <Pressable onPress={closeMenu} hitSlop={10} style={styles.menuCloseBtn}>
-              <CloseIcon size={13} />
-            </Pressable>
-          </View>
-          <Text style={styles.menuHint}>Désactive les communes que tu n'utilises pas pour alléger la liste.</Text>
-          <View style={styles.menuActionsRow}>
-            <Pressable style={styles.menuActionBtn} onPress={showAll}>
-              <Text style={styles.menuActionText}>Tout afficher</Text>
-            </Pressable>
-            <Pressable style={styles.menuActionBtn} onPress={hideAll}>
-              <Text style={styles.menuActionText}>Tout masquer</Text>
-            </Pressable>
-          </View>
-          <ScrollView style={styles.menuList} showsVerticalScrollIndicator={false}>
-            {allCommunes.map((commune) => {
-              const isVisible = !hidden?.has(commune);
-              const count = zonesByCommune.get(commune)?.length ?? 0;
-              return (
-                <Pressable key={commune} style={styles.menuRow} onPress={() => toggleCommune(commune)}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.menuRowText, !isVisible && styles.menuRowTextDim]}>{commune}</Text>
-                    <Text style={styles.menuRowCount}>
-                      {count} zone{count !== 1 ? "s" : ""}
-                    </Text>
-                  </View>
-                  <Switch value={isVisible} onValueChange={() => toggleCommune(commune)} trackColor={{ true: "#1FAA59", false: "#d8d8dc" }} />
-                </Pressable>
-              );
-            })}
-          </ScrollView>
+        <Animated.View style={[{ position: "absolute", left: 0, top: 0, bottom: 0, width: DRAWER_WIDTH }, { transform: [{ translateX: drawerX }] }]}>
+          <DrawerPanel>
+            <View style={styles.drawerHeader}>
+              <Text style={styles.drawerTitle}>Communes</Text>
+              <Pressable style={styles.drawerCloseBtn} onPress={closeMenu} hitSlop={10}>
+                <CloseIcon size={12} color="rgba(255,255,255,0.7)" />
+              </Pressable>
+            </View>
+            <Text style={styles.drawerHint}>Masque les communes inutiles pour alléger la liste.</Text>
+            <View style={styles.drawerActions}>
+              <Pressable style={styles.drawerActionBtn} onPress={showAll}>
+                <Text style={styles.drawerActionText}>Tout afficher</Text>
+              </Pressable>
+              <Pressable style={styles.drawerActionBtn} onPress={hideAll}>
+                <Text style={styles.drawerActionText}>Tout masquer</Text>
+              </Pressable>
+            </View>
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+              {allCommunes.map((commune) => {
+                const isVisible = !hidden?.has(commune);
+                const count = zonesByCommune.get(commune)?.length ?? 0;
+                return (
+                  <Pressable key={commune} style={styles.drawerRow} onPress={() => toggleCommune(commune)}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.drawerRowName, !isVisible && { color: "rgba(255,255,255,0.25)" }]}>{commune}</Text>
+                      <Text style={styles.drawerRowCount}>{count} zone{count !== 1 ? "s" : ""}</Text>
+                    </View>
+                    <Switch
+                      value={isVisible}
+                      onValueChange={() => toggleCommune(commune)}
+                      trackColor={{ true: GREEN, false: "rgba(255,255,255,0.1)" }}
+                      thumbColor="#fff"
+                    />
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </DrawerPanel>
         </Animated.View>
       </Modal>
     </View>
@@ -262,14 +250,24 @@ export default function ZonePickerScreen({ onZoneSelected, headerOverride }: Pro
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", paddingTop: 60, paddingHorizontal: 20 },
-  brandRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 18 },
-  hamburger: { width: 44, height: 44, borderRadius: 13, backgroundColor: "#F2F2F7", alignItems: "center", justifyContent: "center" },
-  hamburgerBadge: {
+  container: { flex: 1, backgroundColor: "#08080D", paddingTop: 60, paddingHorizontal: 20 },
+
+  brandRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 20 },
+  iconBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badge: {
     position: "absolute",
     top: -5,
     right: -5,
-    backgroundColor: "#D8333A",
+    backgroundColor: "#FF3B5C",
     borderRadius: 9,
     minWidth: 18,
     height: 18,
@@ -277,91 +275,109 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 3,
     borderWidth: 2,
-    borderColor: "#fff",
+    borderColor: "#08080D",
   },
-  hamburgerBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Manrope_800ExtraBold" },
-  logo: { width: 44, height: 44, borderRadius: 13 },
-  title: { fontSize: 20, fontFamily: "Manrope_800ExtraBold", color: "#1a1a1a" },
-  subtitle: { fontSize: 12, color: "#1FAA59", marginTop: 1, fontFamily: "Manrope_700Bold" },
-  searchWrap: { position: "relative", marginBottom: 12 },
-  searchIconWrap: { position: "absolute", left: 14, top: 0, bottom: 0, justifyContent: "center", zIndex: 1 },
+  badgeText: { color: "#fff", fontSize: 10, fontFamily: "Manrope_800ExtraBold" },
+  logo: { width: 42, height: 42, borderRadius: 13 },
+  title: { fontSize: 20, fontFamily: "Manrope_800ExtraBold", color: "#fff" },
+  subtitle: { fontSize: 12, color: GREEN, marginTop: 2, fontFamily: "Manrope_700Bold" },
+
+  searchWrap: { position: "relative", marginBottom: 16 },
+  searchIcon: { position: "absolute", left: 14, top: 0, bottom: 0, justifyContent: "center", zIndex: 1 },
   search: {
-    backgroundColor: "#F2F2F7",
-    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
     paddingLeft: 40,
     paddingRight: 14,
-    paddingVertical: 12,
-    fontSize: 15,
+    paddingVertical: 13,
+    fontSize: 14.5,
     fontFamily: "Manrope_400Regular",
-    color: "#1a1a1a",
+    color: "#fff",
   },
-  list: { paddingBottom: 40, gap: 8 },
-  sectionHeaderRow: {
+
+  list: { paddingBottom: 48, gap: 4 },
+  communeRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 16,
+    marginTop: 20,
     marginBottom: 6,
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
-  sectionHeaderRowPressed: { opacity: 0.6 },
-  sectionHeader: {
-    fontSize: 13,
-    fontFamily: "Manrope_700Bold",
-    color: "#1FAA59",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  card: {
-    backgroundColor: "#F7F7F9",
-    borderRadius: 12,
+  communeName: { fontSize: 12, fontFamily: "Manrope_700Bold", color: GREEN, textTransform: "uppercase", letterSpacing: 0.8 },
+  zoneRow: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 16,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 11,
+    marginBottom: 5,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.07)",
   },
-  cardPressed: { backgroundColor: "#ECECF0" },
-  cardDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#1FAA59" },
-  cardZone: { fontSize: 15.5, fontFamily: "Manrope_600SemiBold", color: "#1a1a1a", flex: 1 },
+  zoneRowPressed: { backgroundColor: "rgba(255,255,255,0.09)" },
+  zoneDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: GREEN },
+  zoneName: { fontSize: 15, fontFamily: "Manrope_600SemiBold", color: "#fff", flex: 1 },
+
   emptyWrap: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 30, gap: 10, marginTop: -60 },
   emptyEmoji: { fontSize: 40 },
-  empty: { textAlign: "center", color: "#888", fontSize: 14, fontFamily: "Manrope_600SemiBold" },
-  emptyAction: { marginTop: 6, backgroundColor: "#1FAA59", paddingVertical: 10, paddingHorizontal: 20, borderRadius: 999 },
-  emptyActionText: { color: "#fff", fontFamily: "Manrope_700Bold", fontSize: 14 },
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
-  menuPanel: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: DRAWER_WIDTH,
-    backgroundColor: "#fff",
+  empty: { textAlign: "center", color: "rgba(255,255,255,0.4)", fontSize: 14, fontFamily: "Manrope_600SemiBold" },
+  emptyBtn: { marginTop: 6, backgroundColor: GREEN, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 999 },
+  emptyBtnText: { color: "#08080D", fontFamily: "Manrope_700Bold", fontSize: 14 },
+
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)" },
+  drawer: {
+    flex: 1,
     paddingTop: 60,
     paddingHorizontal: 20,
     paddingBottom: 20,
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    shadowOffset: { width: 4, height: 0 },
+    borderRightWidth: 1,
+    borderRightColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
   },
-  menuHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  menuTitle: { fontSize: 19, fontFamily: "Manrope_800ExtraBold", color: "#1a1a1a" },
-  menuCloseBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: "#F2F2F7", alignItems: "center", justifyContent: "center" },
-  menuHint: { fontSize: 12, color: "#888", marginTop: 8, marginBottom: 14, lineHeight: 17, fontFamily: "Manrope_400Regular" },
-  menuActionsRow: { flexDirection: "row", gap: 10, marginBottom: 10 },
-  menuActionBtn: { flex: 1, backgroundColor: "#F2F2F7", borderRadius: 10, paddingVertical: 10, alignItems: "center" },
-  menuActionText: { fontSize: 13, fontFamily: "Manrope_700Bold", color: "#1FAA59" },
-  menuList: { flex: 1 },
-  menuRow: {
+  drawerWeb: {
+    flex: 1,
+    paddingTop: 60,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    backgroundColor: "#12121A",
+    borderRightWidth: 1,
+    borderRightColor: "rgba(255,255,255,0.08)",
+  },
+  drawerHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
+  drawerTitle: { fontSize: 19, fontFamily: "Manrope_800ExtraBold", color: "#fff" },
+  drawerCloseBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  drawerHint: { fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 16, lineHeight: 17, fontFamily: "Manrope_400Regular" },
+  drawerActions: { flexDirection: "row", gap: 10, marginBottom: 12 },
+  drawerActionBtn: {
+    flex: 1,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  drawerActionText: { fontSize: 13, fontFamily: "Manrope_700Bold", color: GREEN },
+  drawerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 12,
+    paddingVertical: 13,
     borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    borderBottomColor: "rgba(255,255,255,0.07)",
   },
-  menuRowText: { fontSize: 15, color: "#1a1a1a", fontFamily: "Manrope_600SemiBold" },
-  menuRowTextDim: { color: "#b5b5ba" },
-  menuRowCount: { fontSize: 12, color: "#9b9ba1", marginTop: 2, fontFamily: "Manrope_400Regular" },
+  drawerRowName: { fontSize: 14.5, color: "#fff", fontFamily: "Manrope_600SemiBold" },
+  drawerRowCount: { fontSize: 11.5, color: "rgba(255,255,255,0.3)", marginTop: 2, fontFamily: "Manrope_400Regular" },
 });
