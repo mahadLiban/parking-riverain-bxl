@@ -1,3 +1,5 @@
+import { Manrope_400Regular, Manrope_600SemiBold, Manrope_700Bold, Manrope_800ExtraBold } from "@expo-google-fonts/manrope";
+import { useFonts } from "expo-font";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
@@ -12,6 +14,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { ChevronIcon, CloseIcon, MenuIcon, SearchIcon } from "../components/icons";
 import { RESIDENT_ZONES, ResidentZone } from "../data/zones";
 import { getHiddenCommunes, setHiddenCommunes } from "../storage/hiddenCommunes";
 import { setSelectedZoneId } from "../storage/selectedZone";
@@ -23,6 +26,12 @@ type Props = {
 const DRAWER_WIDTH = 300;
 
 export default function ZonePickerScreen({ onZoneSelected }: Props) {
+  const [fontsLoaded] = useFonts({
+    Manrope_400Regular,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+    Manrope_800ExtraBold,
+  });
   const [query, setQuery] = useState("");
   const [hidden, setHidden] = useState<Set<string> | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
@@ -66,11 +75,8 @@ export default function ZonePickerScreen({ onZoneSelected }: Props) {
   const toggleCommune = (commune: string) => {
     if (!hidden) return;
     const next = new Set(hidden);
-    if (next.has(commune)) {
-      next.delete(commune);
-    } else {
-      next.add(commune);
-    }
+    if (next.has(commune)) next.delete(commune);
+    else next.add(commune);
     setHidden(next);
     setHiddenCommunes(Array.from(next));
   };
@@ -100,20 +106,15 @@ export default function ZonePickerScreen({ onZoneSelected }: Props) {
   });
 
   const hiddenCount = hidden?.size ?? 0;
-  const totalZonesVisible = visibleCommunes.reduce(
-    (sum, c) => sum + (zonesByCommune.get(c)?.length ?? 0),
-    0
-  );
+  const totalZonesVisible = visibleCommunes.reduce((sum, c) => sum + (zonesByCommune.get(c)?.length ?? 0), 0);
+
+  if (!fontsLoaded) return <View style={styles.container} />;
 
   return (
     <View style={styles.container}>
       <View style={styles.brandRow}>
         <Pressable style={styles.hamburger} onPress={openMenu} hitSlop={10}>
-          <View style={styles.hamburgerLines}>
-            <View style={styles.hamburgerLine} />
-            <View style={[styles.hamburgerLine, { width: 14 }]} />
-            <View style={styles.hamburgerLine} />
-          </View>
+          <MenuIcon size={19} />
           {hiddenCount > 0 && (
             <View style={styles.hamburgerBadge}>
               <Text style={styles.hamburgerBadgeText}>{hiddenCount}</Text>
@@ -124,14 +125,15 @@ export default function ZonePickerScreen({ onZoneSelected }: Props) {
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Riverain BXL</Text>
           <Text style={styles.subtitle}>
-            {totalZonesVisible} zone{totalZonesVisible !== 1 ? "s" : ""} disponible
-            {totalZonesVisible !== 1 ? "s" : ""}
+            {totalZonesVisible} zone{totalZonesVisible !== 1 ? "s" : ""} disponible{totalZonesVisible !== 1 ? "s" : ""}
           </Text>
         </View>
       </View>
 
       <View style={styles.searchWrap}>
-        <Text style={styles.searchIcon}>⌕</Text>
+        <View style={styles.searchIconWrap}>
+          <SearchIcon size={16} />
+        </View>
         <TextInput
           style={styles.search}
           placeholder="Rechercher une commune ou une zone..."
@@ -147,9 +149,7 @@ export default function ZonePickerScreen({ onZoneSelected }: Props) {
         <View style={styles.emptyWrap}>
           <Text style={styles.emptyEmoji}>{hiddenCount > 0 ? "🙈" : "🔎"}</Text>
           <Text style={styles.empty}>
-            {hiddenCount > 0
-              ? "Toutes les communes sont masquées."
-              : "Aucune zone ne correspond à ta recherche."}
+            {hiddenCount > 0 ? "Toutes les communes sont masquées." : "Aucune zone ne correspond à ta recherche."}
           </Text>
           {hiddenCount > 0 && (
             <Pressable style={styles.emptyAction} onPress={showAll}>
@@ -170,7 +170,7 @@ export default function ZonePickerScreen({ onZoneSelected }: Props) {
                 >
                   <View style={styles.cardDot} />
                   <Text style={styles.cardZone}>{item.name}</Text>
-                  <Text style={styles.cardChevron}>›</Text>
+                  <ChevronIcon size={15} />
                 </Pressable>
               ))}
             </View>
@@ -186,12 +186,10 @@ export default function ZonePickerScreen({ onZoneSelected }: Props) {
           <View style={styles.menuHeader}>
             <Text style={styles.menuTitle}>Communes</Text>
             <Pressable onPress={closeMenu} hitSlop={10} style={styles.menuCloseBtn}>
-              <Text style={styles.menuCloseIcon}>✕</Text>
+              <CloseIcon size={13} />
             </Pressable>
           </View>
-          <Text style={styles.menuHint}>
-            Désactive les communes que tu n'utilises pas pour alléger la liste.
-          </Text>
+          <Text style={styles.menuHint}>Désactive les communes que tu n'utilises pas pour alléger la liste.</Text>
           <View style={styles.menuActionsRow}>
             <Pressable style={styles.menuActionBtn} onPress={showAll}>
               <Text style={styles.menuActionText}>Tout afficher</Text>
@@ -205,24 +203,14 @@ export default function ZonePickerScreen({ onZoneSelected }: Props) {
               const isVisible = !hidden?.has(commune);
               const count = zonesByCommune.get(commune)?.length ?? 0;
               return (
-                <Pressable
-                  key={commune}
-                  style={styles.menuRow}
-                  onPress={() => toggleCommune(commune)}
-                >
+                <Pressable key={commune} style={styles.menuRow} onPress={() => toggleCommune(commune)}>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.menuRowText, !isVisible && styles.menuRowTextDim]}>
-                      {commune}
-                    </Text>
+                    <Text style={[styles.menuRowText, !isVisible && styles.menuRowTextDim]}>{commune}</Text>
                     <Text style={styles.menuRowCount}>
                       {count} zone{count !== 1 ? "s" : ""}
                     </Text>
                   </View>
-                  <Switch
-                    value={isVisible}
-                    onValueChange={() => toggleCommune(commune)}
-                    trackColor={{ true: "#1FAA59", false: "#d8d8dc" }}
-                  />
+                  <Switch value={isVisible} onValueChange={() => toggleCommune(commune)} trackColor={{ true: "#1FAA59", false: "#d8d8dc" }} />
                 </Pressable>
               );
             })}
@@ -236,16 +224,7 @@ export default function ZonePickerScreen({ onZoneSelected }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff", paddingTop: 60, paddingHorizontal: 20 },
   brandRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 18 },
-  hamburger: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: "#F2F2F7",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  hamburgerLines: { gap: 4, alignItems: "flex-start" },
-  hamburgerLine: { width: 20, height: 2.4, borderRadius: 2, backgroundColor: "#1a1a1a" },
+  hamburger: { width: 44, height: 44, borderRadius: 13, backgroundColor: "#F2F2F7", alignItems: "center", justifyContent: "center" },
   hamburgerBadge: {
     position: "absolute",
     top: -5,
@@ -260,23 +239,26 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#fff",
   },
-  hamburgerBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
+  hamburgerBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Manrope_800ExtraBold" },
   logo: { width: 44, height: 44, borderRadius: 13 },
-  title: { fontSize: 20, fontWeight: "800", color: "#1a1a1a" },
-  subtitle: { fontSize: 12, color: "#1FAA59", marginTop: 1, fontWeight: "600" },
+  title: { fontSize: 20, fontFamily: "Manrope_800ExtraBold", color: "#1a1a1a" },
+  subtitle: { fontSize: 12, color: "#1FAA59", marginTop: 1, fontFamily: "Manrope_700Bold" },
   searchWrap: { position: "relative", marginBottom: 12 },
-  searchIcon: { position: "absolute", left: 14, top: 12, fontSize: 16, color: "#9b9ba1", zIndex: 1 },
+  searchIconWrap: { position: "absolute", left: 14, top: 0, bottom: 0, justifyContent: "center", zIndex: 1 },
   search: {
     backgroundColor: "#F2F2F7",
     borderRadius: 12,
-    paddingHorizontal: 38,
+    paddingLeft: 40,
+    paddingRight: 14,
     paddingVertical: 12,
     fontSize: 15,
+    fontFamily: "Manrope_400Regular",
+    color: "#1a1a1a",
   },
   list: { paddingBottom: 40, gap: 8 },
   sectionHeader: {
     fontSize: 13,
-    fontWeight: "700",
+    fontFamily: "Manrope_700Bold",
     color: "#1FAA59",
     textTransform: "uppercase",
     letterSpacing: 0.5,
@@ -294,13 +276,12 @@ const styles = StyleSheet.create({
   },
   cardPressed: { backgroundColor: "#ECECF0" },
   cardDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#1FAA59" },
-  cardZone: { fontSize: 16, fontWeight: "600", color: "#1a1a1a", flex: 1 },
-  cardChevron: { fontSize: 18, color: "#c0c0c5", fontWeight: "700" },
+  cardZone: { fontSize: 15.5, fontFamily: "Manrope_600SemiBold", color: "#1a1a1a", flex: 1 },
   emptyWrap: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 30, gap: 10, marginTop: -60 },
   emptyEmoji: { fontSize: 40 },
-  empty: { textAlign: "center", color: "#888", fontSize: 14 },
+  empty: { textAlign: "center", color: "#888", fontSize: 14, fontFamily: "Manrope_600SemiBold" },
   emptyAction: { marginTop: 6, backgroundColor: "#1FAA59", paddingVertical: 10, paddingHorizontal: 20, borderRadius: 999 },
-  emptyActionText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  emptyActionText: { color: "#fff", fontFamily: "Manrope_700Bold", fontSize: 14 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
   menuPanel: {
     position: "absolute",
@@ -318,26 +299,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 4, height: 0 },
   },
   menuHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  menuTitle: { fontSize: 19, fontWeight: "800", color: "#1a1a1a" },
-  menuCloseBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#F2F2F7",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  menuCloseIcon: { fontSize: 13, color: "#1a1a1a", fontWeight: "700" },
-  menuHint: { fontSize: 12, color: "#888", marginTop: 8, marginBottom: 14, lineHeight: 17 },
+  menuTitle: { fontSize: 19, fontFamily: "Manrope_800ExtraBold", color: "#1a1a1a" },
+  menuCloseBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: "#F2F2F7", alignItems: "center", justifyContent: "center" },
+  menuHint: { fontSize: 12, color: "#888", marginTop: 8, marginBottom: 14, lineHeight: 17, fontFamily: "Manrope_400Regular" },
   menuActionsRow: { flexDirection: "row", gap: 10, marginBottom: 10 },
-  menuActionBtn: {
-    flex: 1,
-    backgroundColor: "#F2F2F7",
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  menuActionText: { fontSize: 13, fontWeight: "700", color: "#1FAA59" },
+  menuActionBtn: { flex: 1, backgroundColor: "#F2F2F7", borderRadius: 10, paddingVertical: 10, alignItems: "center" },
+  menuActionText: { fontSize: 13, fontFamily: "Manrope_700Bold", color: "#1FAA59" },
   menuList: { flex: 1 },
   menuRow: {
     flexDirection: "row",
@@ -347,7 +314,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#F0F0F0",
   },
-  menuRowText: { fontSize: 15, color: "#1a1a1a", fontWeight: "600" },
+  menuRowText: { fontSize: 15, color: "#1a1a1a", fontFamily: "Manrope_600SemiBold" },
   menuRowTextDim: { color: "#b5b5ba" },
-  menuRowCount: { fontSize: 12, color: "#9b9ba1", marginTop: 2 },
+  menuRowCount: { fontSize: 12, color: "#9b9ba1", marginTop: 2, fontFamily: "Manrope_400Regular" },
 });
