@@ -51,7 +51,8 @@
       "url": "https://u.expo.dev/6d176b7d-767d-47aa-b0d3-bc7ece516e7f"
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      "expo-notifications"
     ]
   }
 }

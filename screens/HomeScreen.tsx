@@ -9,13 +9,17 @@ import {
   Easing,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import { CheckIcon, CrossIcon, LogoutIcon, PinIcon, RefreshIcon } from "../components/icons";
+import ParkingTimerCard from "../components/ParkingTimerCard";
+import RegulationMap from "../components/RegulationMap";
 import { findRegulationZone, RegulationMatch } from "../data/regulationZones";
 import { getZoneById } from "../data/zones";
+import { getLastResult, setLastResult } from "../storage/lastResult";
 import { isPointInPolygon } from "../utils/geo";
 
 type Props = {
@@ -29,7 +33,7 @@ type Status =
   | { kind: "loading" }
   | { kind: "permission-denied" }
   | { kind: "error"; message: string }
-  | { kind: "result"; inside: boolean; accuracy: number | null; regulation: RegulationMatch | null };
+  | { kind: "result"; inside: boolean; accuracy: number | null; regulation: RegulationMatch | null; position: { latitude: number; longitude: number }; stale?: boolean };
 
 const REGULATION_LABELS: Record<string, string> = {
   rouge: "Zone rouge",
@@ -60,6 +64,18 @@ function regulationSummary(match: RegulationMatch | null): { title: string; body
   }
   if (z.type === "reserve-riverain") {
     return { title: `${prefix}${label}`, body: "Réservé aux détenteurs d'une carte riverain de ce secteur." };
+  }
+  if (z.type === "poids-lourds") {
+    return {
+      title: `${prefix}${label}`,
+      body: "Zone réservée aux poids-lourds. Pour une voiture, la règle de stationnement habituelle de la rue s'applique en dehors de ces emplacements.",
+    };
+  }
+  if (z.type === "evenement") {
+    return {
+      title: `${prefix}${label}`,
+      body: "Réglementation événementielle ponctuelle active sur ce tronçon. Vérifie la signalisation temporaire sur place, elle prime sur la règle habituelle.",
+    };
   }
 
   const parts: string[] = [];
@@ -144,11 +160,18 @@ export default function HomeScreen({ zoneId, username, onChangeZone, onLogout }:
       const coords = { latitude: position.coords.latitude, longitude: position.coords.longitude };
       const inside = isPointInPolygon(coords, zone.polygon);
       const regulation = findRegulationZone(coords);
-      setStatus({ kind: "result", inside, accuracy: position.coords.accuracy ?? null, regulation });
+      setStatus({ kind: "result", inside, accuracy: position.coords.accuracy ?? null, regulation, position: coords });
       setLastChecked(new Date());
       hapticFeedback(inside ? "success" : "warning");
+      setLastResult({ inside, regulation, checkedAt: Date.now(), latitude: coords.latitude, longitude: coords.longitude }).catch(() => {});
     } catch (e) {
-      setStatus({ kind: "error", message: "Impossible d'obtenir ta position." });
+      const cached = await getLastResult().catch(() => null);
+      if (cached) {
+        setStatus({ kind: "result", inside: cached.inside, accuracy: null, regulation: cached.regulation, position: { latitude: cached.latitude, longitude: cached.longitude }, stale: true });
+        setLastChecked(new Date(cached.checkedAt));
+      } else {
+        setStatus({ kind: "error", message: "Impossible d'obtenir ta position." });
+      }
     }
   }, [zone, fade, slideUp, colorFade]);
 
@@ -209,7 +232,8 @@ export default function HomeScreen({ zoneId, username, onChangeZone, onLogout }:
         </View>
         <Text style={styles.greeting}>Salut {username} 👋</Text>
 
-        <View style={styles.center}>
+        {/* Big button — always visible, not scrollable */}
+        <View style={styles.buttonWrap}>
           <Animated.View
             style={[
               styles.buttonShadowWrap,
@@ -245,11 +269,25 @@ export default function HomeScreen({ zoneId, username, onChangeZone, onLogout }:
               </View>
             </Pressable>
           </Animated.View>
+        </View>
+
+        {/* Cards — scrollable */}
+        <ScrollView
+          style={styles.scrollArea}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Bannière hors-ligne */}
+          {isResult && status.stale && (
+            <View style={styles.staleBanner}>
+              <Text style={styles.staleBannerText}>
+                ⚠ Hors-ligne · Dernière position connue ({lastChecked ? formatTime(lastChecked) : "—"})
+              </Text>
+            </View>
+          )}
 
           {isResult && (
-            <Animated.View
-              style={[styles.infoCard, { opacity: fade, transform: [{ translateY: slideUp }] }]}
-            >
+            <Animated.View style={[styles.infoCard, { opacity: fade, transform: [{ translateY: slideUp }] }]}>
               <Text style={[styles.infoTitle, { color: cardTextColor }]}>
                 {status.inside ? "Stationnement gratuit" : "Stationnement payant"}
               </Text>
@@ -258,7 +296,7 @@ export default function HomeScreen({ zoneId, username, onChangeZone, onLogout }:
                   ? "Tu es dans ta zone riverain. Tu peux te garer gratuitement ici avec ta carte."
                   : "Tu es hors de ta zone riverain. Le tarif normal s'applique sur cette rue."}
               </Text>
-              {lastChecked && (
+              {lastChecked && !status.stale && (
                 <View style={styles.infoMetaRow}>
                   <View style={styles.infoMetaDot} />
                   <Text style={styles.infoMeta}>
@@ -270,28 +308,44 @@ export default function HomeScreen({ zoneId, username, onChangeZone, onLogout }:
             </Animated.View>
           )}
 
-          {isResult &&
-            (() => {
-              const reg = regulationSummary(status.regulation);
-              return (
-                <Animated.View
-                  style={[styles.infoCard, styles.regCard, { opacity: fade, transform: [{ translateY: slideUp }] }]}
-                >
-                  <Text style={styles.regLabel}>Sans carte riverain</Text>
-                  <Text style={[styles.infoTitle, { color: "#1a1a1a" }]}>{reg.title}</Text>
-                  <Text style={styles.infoBody}>{reg.body}</Text>
-                </Animated.View>
-              );
-            })()}
-        </View>
+          {isResult && (() => {
+            const reg = regulationSummary(status.regulation);
+            return (
+              <Animated.View style={[styles.infoCard, styles.regCard, { opacity: fade, transform: [{ translateY: slideUp }] }]}>
+                <Text style={styles.regLabel}>Sans carte riverain</Text>
+                <Text style={[styles.infoTitle, { color: "#1a1a1a" }]}>{reg.title}</Text>
+                <Text style={styles.infoBody}>{reg.body}</Text>
+              </Animated.View>
+            );
+          })()}
 
-        <Pressable
-          style={({ pressed }) => [styles.refresh, { backgroundColor: accentColor }, pressed && { opacity: 0.85 }]}
-          onPress={checkPosition}
-        >
-          <RefreshIcon size={15} />
-          <Text style={styles.refreshText}>Actualiser ma position</Text>
-        </Pressable>
+          {/* Minuteur — visible si la zone a un maxtime */}
+          {isResult && status.regulation && (
+            <Animated.View style={{ opacity: fade, transform: [{ translateY: slideUp }], width: "100%", maxWidth: 340 }}>
+              <ParkingTimerCard zone={status.regulation.zone} />
+            </Animated.View>
+          )}
+
+          {/* Mini-carte */}
+          {isResult && zone && (
+            <Animated.View style={{ opacity: fade, transform: [{ translateY: slideUp }] }}>
+              <RegulationMap
+                position={status.position}
+                residentPolygon={zone.polygon}
+                regulationPolygons={status.regulation?.zone.polygons ?? []}
+                inside={status.inside}
+              />
+            </Animated.View>
+          )}
+
+          <Pressable
+            style={({ pressed }) => [styles.refresh, { backgroundColor: accentColor }, pressed && { opacity: 0.85 }]}
+            onPress={checkPosition}
+          >
+            <RefreshIcon size={15} />
+            <Text style={styles.refreshText}>Actualiser ma position</Text>
+          </Pressable>
+        </ScrollView>
       </View>
     </View>
   );
@@ -301,7 +355,7 @@ const RING = 248;
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  container: { flex: 1, paddingHorizontal: 20, paddingTop: 56, paddingBottom: 36 },
+  container: { flex: 1, paddingHorizontal: 20, paddingTop: 56 },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   zoneChip: {
     backgroundColor: "rgba(255,255,255,0.14)",
@@ -338,7 +392,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   greeting: { color: "rgba(255,255,255,0.85)", fontFamily: "Manrope_600SemiBold", fontSize: 13, marginTop: 10 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 24 },
+  buttonWrap: { alignItems: "center", justifyContent: "center", paddingVertical: 28 },
+  scrollArea: { flex: 1 },
+  scrollContent: { alignItems: "center", gap: 16, paddingBottom: 24 },
+  staleBanner: {
+    backgroundColor: "rgba(255,200,60,0.22)",
+    borderRadius: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    width: "100%",
+    maxWidth: 340,
+  },
+  staleBannerText: { fontSize: 12.5, fontFamily: "Manrope_600SemiBold", color: "#7a5600", textAlign: "center" },
   buttonShadowWrap: {
     shadowColor: "#000",
     shadowOpacity: 0.35,
