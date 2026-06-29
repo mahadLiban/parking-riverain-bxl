@@ -96,32 +96,20 @@ export default function AuthScreen({ onAuthenticated }: Props) {
     const { data, error: signUpError } = await supabase.auth.signUp({
       email: email.trim(),
       password,
+      options: {
+        data: { username: username.trim(), zone_id: zoneId },
+      },
     });
-    if (signUpError || !data.user) {
-      setLoading(false);
-      setMode("signup-form");
-      setError(
-        signUpError?.message === "User already registered"
-          ? "Un compte existe déjà avec cet email."
-          : signUpError?.message ?? "Inscription impossible."
-      );
-      return;
-    }
-
-    const { error: profileError } = await supabase.from("profiles").insert({
-      id: data.user.id,
-      username: username.trim(),
-      zone_id: zoneId,
-    });
-
     setLoading(false);
-
-    if (profileError) {
+    if (signUpError || !data.user) {
       setMode("signup-form");
+      const msg = signUpError?.message ?? "";
       setError(
-        profileError.message.includes("duplicate")
+        msg === "User already registered"
+          ? "Un compte existe déjà avec cet email."
+          : msg.toLowerCase().includes("duplicate") || msg.toLowerCase().includes("profiles_username")
           ? "Ce pseudo est déjà pris."
-          : "Impossible de créer ton profil. Réessaie."
+          : msg || "Inscription impossible."
       );
       return;
     }
