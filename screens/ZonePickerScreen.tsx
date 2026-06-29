@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { ChevronIcon, CloseIcon, MenuIcon, SearchIcon } from "../components/icons";
 import { RESIDENT_ZONES, ResidentZone } from "../data/zones";
+import { getCollapsedCommunes, setCollapsedCommunes } from "../storage/collapsedCommunes";
 import { getHiddenCommunes, setHiddenCommunes } from "../storage/hiddenCommunes";
 import { setSelectedZoneId } from "../storage/selectedZone";
 
@@ -34,6 +35,7 @@ export default function ZonePickerScreen({ onZoneSelected }: Props) {
   });
   const [query, setQuery] = useState("");
   const [hidden, setHidden] = useState<Set<string> | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [menuVisible, setMenuVisible] = useState(false);
   const drawerX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
@@ -55,7 +57,16 @@ export default function ZonePickerScreen({ onZoneSelected }: Props) {
 
   useEffect(() => {
     getHiddenCommunes().then((list) => setHidden(new Set(list)));
+    getCollapsedCommunes().then((list) => setCollapsed(new Set(list)));
   }, []);
+
+  const toggleCollapsed = (commune: string) => {
+    const next = new Set(collapsed);
+    if (next.has(commune)) next.delete(commune);
+    else next.add(commune);
+    setCollapsed(next);
+    setCollapsedCommunes(Array.from(next));
+  };
 
   const openMenu = () => {
     setMenuVisible(true);
@@ -159,22 +170,35 @@ export default function ZonePickerScreen({ onZoneSelected }: Props) {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
-          {visibleCommunes.map((commune) => (
-            <View key={commune}>
-              <Text style={styles.sectionHeader}>{commune}</Text>
-              {(zonesByCommune.get(commune) ?? []).map((item) => (
+          {visibleCommunes.map((commune) => {
+            const isOpen = !collapsed.has(commune);
+            const zones = zonesByCommune.get(commune) ?? [];
+            return (
+              <View key={commune}>
                 <Pressable
-                  key={item.id}
-                  style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-                  onPress={() => handleSelect(item.id)}
+                  style={({ pressed }) => [styles.sectionHeaderRow, pressed && styles.sectionHeaderRowPressed]}
+                  onPress={() => toggleCollapsed(commune)}
                 >
-                  <View style={styles.cardDot} />
-                  <Text style={styles.cardZone}>{item.name}</Text>
-                  <ChevronIcon size={15} />
+                  <Text style={styles.sectionHeader}>{commune}</Text>
+                  <View style={{ transform: [{ rotate: isOpen ? "90deg" : "0deg" }] }}>
+                    <ChevronIcon size={14} color="#1FAA59" />
+                  </View>
                 </Pressable>
-              ))}
-            </View>
-          ))}
+                {isOpen &&
+                  zones.map((item) => (
+                    <Pressable
+                      key={item.id}
+                      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+                      onPress={() => handleSelect(item.id)}
+                    >
+                      <View style={styles.cardDot} />
+                      <Text style={styles.cardZone}>{item.name}</Text>
+                      <ChevronIcon size={15} />
+                    </Pressable>
+                  ))}
+              </View>
+            );
+          })}
         </ScrollView>
       )}
 
@@ -256,14 +280,21 @@ const styles = StyleSheet.create({
     color: "#1a1a1a",
   },
   list: { paddingBottom: 40, gap: 8 },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 16,
+    marginBottom: 6,
+    paddingVertical: 4,
+  },
+  sectionHeaderRowPressed: { opacity: 0.6 },
   sectionHeader: {
     fontSize: 13,
     fontFamily: "Manrope_700Bold",
     color: "#1FAA59",
     textTransform: "uppercase",
     letterSpacing: 0.5,
-    marginTop: 16,
-    marginBottom: 6,
   },
   card: {
     backgroundColor: "#F7F7F9",
