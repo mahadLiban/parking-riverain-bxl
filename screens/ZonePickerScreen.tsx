@@ -14,19 +14,26 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { ChevronIcon, CloseIcon, MenuIcon, SearchIcon } from "../components/icons";
+import { BackIcon, ChevronIcon, CloseIcon, MenuIcon, SearchIcon } from "../components/icons";
 import { RESIDENT_ZONES, ResidentZone } from "../data/zones";
 import { getCollapsedCommunes, setCollapsedCommunes } from "../storage/collapsedCommunes";
 import { getHiddenCommunes, setHiddenCommunes } from "../storage/hiddenCommunes";
 import { setSelectedZoneId } from "../storage/selectedZone";
 
+type HeaderOverride = {
+  title: string;
+  subtitle: string;
+  onBack: () => void;
+};
+
 type Props = {
   onZoneSelected: (zoneId: string) => void;
+  headerOverride?: HeaderOverride;
 };
 
 const DRAWER_WIDTH = 300;
 
-export default function ZonePickerScreen({ onZoneSelected }: Props) {
+export default function ZonePickerScreen({ onZoneSelected, headerOverride }: Props) {
   const [fontsLoaded] = useFonts({
     Manrope_400Regular,
     Manrope_600SemiBold,
@@ -104,7 +111,9 @@ export default function ZonePickerScreen({ onZoneSelected }: Props) {
   };
 
   const handleSelect = async (zoneId: string) => {
-    await setSelectedZoneId(zoneId);
+    if (!headerOverride) {
+      await setSelectedZoneId(zoneId);
+    }
     onZoneSelected(zoneId);
   };
 
@@ -124,19 +133,26 @@ export default function ZonePickerScreen({ onZoneSelected }: Props) {
   return (
     <View style={styles.container}>
       <View style={styles.brandRow}>
-        <Pressable style={styles.hamburger} onPress={openMenu} hitSlop={10}>
-          <MenuIcon size={19} />
-          {hiddenCount > 0 && (
-            <View style={styles.hamburgerBadge}>
-              <Text style={styles.hamburgerBadgeText}>{hiddenCount}</Text>
-            </View>
-          )}
-        </Pressable>
-        <Image source={require("../assets/icon.png")} style={styles.logo} />
+        {headerOverride ? (
+          <Pressable style={styles.hamburger} onPress={headerOverride.onBack} hitSlop={10}>
+            <BackIcon size={19} />
+          </Pressable>
+        ) : (
+          <Pressable style={styles.hamburger} onPress={openMenu} hitSlop={10}>
+            <MenuIcon size={19} />
+            {hiddenCount > 0 && (
+              <View style={styles.hamburgerBadge}>
+                <Text style={styles.hamburgerBadgeText}>{hiddenCount}</Text>
+              </View>
+            )}
+          </Pressable>
+        )}
+        {!headerOverride && <Image source={require("../assets/icon.png")} style={styles.logo} />}
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Riverain BXL</Text>
+          <Text style={styles.title}>{headerOverride?.title ?? "Riverain BXL"}</Text>
           <Text style={styles.subtitle}>
-            {totalZonesVisible} zone{totalZonesVisible !== 1 ? "s" : ""} disponible{totalZonesVisible !== 1 ? "s" : ""}
+            {headerOverride?.subtitle ??
+              `${totalZonesVisible} zone${totalZonesVisible !== 1 ? "s" : ""} disponible${totalZonesVisible !== 1 ? "s" : ""}`}
           </Text>
         </View>
       </View>

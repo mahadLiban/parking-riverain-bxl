@@ -13,14 +13,15 @@ import {
   Text,
   View,
 } from "react-native";
-import { CheckIcon, CrossIcon, PinIcon, RefreshIcon } from "../components/icons";
+import { CheckIcon, CrossIcon, LogoutIcon, PinIcon, RefreshIcon } from "../components/icons";
 import { getZoneById } from "../data/zones";
-import { clearSelectedZoneId } from "../storage/selectedZone";
 import { isPointInPolygon } from "../utils/geo";
 
 type Props = {
   zoneId: string;
+  username: string;
   onChangeZone: () => void;
+  onLogout: () => void;
 };
 
 type Status =
@@ -61,7 +62,7 @@ function Spinner() {
   return <Animated.View style={[styles.spinner, { transform: [{ rotate }] }]} />;
 }
 
-export default function HomeScreen({ zoneId, onChangeZone }: Props) {
+export default function HomeScreen({ zoneId, username, onChangeZone, onLogout }: Props) {
   const [fontsLoaded] = useFonts({
     Manrope_400Regular,
     Manrope_600SemiBold,
@@ -124,11 +125,6 @@ export default function HomeScreen({ zoneId, onChangeZone }: Props) {
     }
   }, [status.kind, scale, fade, slideUp, colorFade]);
 
-  const handleChangeZone = async () => {
-    await clearSelectedZoneId();
-    onChangeZone();
-  };
-
   const handlePressIn = () =>
     Animated.spring(pressScale, { toValue: 0.95, useNativeDriver: true, speed: 30 }).start();
   const handlePressOut = () =>
@@ -159,10 +155,16 @@ export default function HomeScreen({ zoneId, onChangeZone }: Props) {
               <Text style={styles.zoneChipName}>{zone?.name ?? "Zone inconnue"}</Text>
             </View>
           </View>
-          <Pressable style={styles.changeBtn} onPress={handleChangeZone} hitSlop={10}>
-            <Text style={styles.changeBtnText}>Changer</Text>
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable style={styles.changeBtn} onPress={onChangeZone} hitSlop={10}>
+              <Text style={styles.changeBtnText}>Changer</Text>
+            </Pressable>
+            <Pressable style={styles.logoutBtn} onPress={onLogout} hitSlop={10}>
+              <LogoutIcon size={15} color="#fff" />
+            </Pressable>
+          </View>
         </View>
+        <Text style={styles.greeting}>Salut {username} 👋</Text>
 
         <View style={styles.center}>
           <Animated.View
@@ -258,6 +260,7 @@ const styles = StyleSheet.create({
   zoneChipTextWrap: {},
   zoneChipCommune: { fontSize: 11, color: "rgba(255,255,255,0.7)", fontFamily: "Manrope_600SemiBold", letterSpacing: 0.3 },
   zoneChipName: { fontSize: 15, color: "#fff", fontFamily: "Manrope_700Bold", marginTop: 1 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   changeBtn: {
     backgroundColor: "rgba(255,255,255,0.14)",
     borderRadius: 16,
@@ -267,6 +270,17 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.18)",
   },
   changeBtnText: { fontSize: 13, color: "#fff", fontFamily: "Manrope_700Bold" },
+  logoutBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  greeting: { color: "rgba(255,255,255,0.85)", fontFamily: "Manrope_600SemiBold", fontSize: 13, marginTop: 10 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 24 },
   buttonShadowWrap: {
     shadowColor: "#000",
