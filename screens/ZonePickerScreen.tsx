@@ -1,5 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Animated,
+  Easing,
   Image,
   Modal,
   Pressable,
@@ -18,10 +20,14 @@ type Props = {
   onZoneSelected: (zoneId: string) => void;
 };
 
+const DRAWER_WIDTH = 300;
+
 export default function ZonePickerScreen({ onZoneSelected }: Props) {
   const [query, setQuery] = useState("");
   const [hidden, setHidden] = useState<Set<string> | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const drawerX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
 
   const zonesByCommune = useMemo(() => {
     const map = new Map<string, ResidentZone[]>();
@@ -41,6 +47,21 @@ export default function ZonePickerScreen({ onZoneSelected }: Props) {
   useEffect(() => {
     getHiddenCommunes().then((list) => setHidden(new Set(list)));
   }, []);
+
+  const openMenu = () => {
+    setMenuVisible(true);
+    Animated.parallel([
+      Animated.timing(drawerX, { toValue: 0, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(backdropOpacity, { toValue: 1, duration: 280, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const closeMenu = () => {
+    Animated.parallel([
+      Animated.timing(drawerX, { toValue: -DRAWER_WIDTH, duration: 220, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(backdropOpacity, { toValue: 0, duration: 220, useNativeDriver: true }),
+    ]).start(() => setMenuVisible(false));
+  };
 
   const toggleCommune = (commune: string) => {
     if (!hidden) return;
@@ -79,12 +100,20 @@ export default function ZonePickerScreen({ onZoneSelected }: Props) {
   });
 
   const hiddenCount = hidden?.size ?? 0;
+  const totalZonesVisible = visibleCommunes.reduce(
+    (sum, c) => sum + (zonesByCommune.get(c)?.length ?? 0),
+    0
+  );
 
   return (
     <View style={styles.container}>
       <View style={styles.brandRow}>
-        <Pressable style={styles.hamburger} onPress={() => setMenuOpen(true)} hitSlop={10}>
-          <Text style={styles.hamburgerIcon}>☰</Text>
+        <Pressable style={styles.hamburger} onPress={openMenu} hitSlop={10}>
+          <View style={styles.hamburgerLines}>
+            <View style={styles.hamburgerLine} />
+            <View style={[styles.hamburgerLine, { width: 14 }]} />
+            <View style={styles.hamburgerLine} />
+          </View>
           {hiddenCount > 0 && (
             <View style={styles.hamburgerBadge}>
               <Text style={styles.hamburgerBadgeText}>{hiddenCount}</Text>
@@ -94,26 +123,40 @@ export default function ZonePickerScreen({ onZoneSelected }: Props) {
         <Image source={require("../assets/icon.png")} style={styles.logo} />
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Riverain BXL</Text>
-          <Text style={styles.subtitle}>Choisis la zone de ta carte riverain</Text>
+          <Text style={styles.subtitle}>
+            {totalZonesVisible} zone{totalZonesVisible !== 1 ? "s" : ""} disponible
+            {totalZonesVisible !== 1 ? "s" : ""}
+          </Text>
         </View>
       </View>
 
-      <TextInput
-        style={styles.search}
-        placeholder="Rechercher une commune ou une zone..."
-        placeholderTextColor="#9b9ba1"
-        value={query}
-        onChangeText={setQuery}
-        autoCorrect={false}
-        clearButtonMode="while-editing"
-      />
+      <View style={styles.searchWrap}>
+        <Text style={styles.searchIcon}>⌕</Text>
+        <TextInput
+          style={styles.search}
+          placeholder="Rechercher une commune ou une zone..."
+          placeholderTextColor="#9b9ba1"
+          value={query}
+          onChangeText={setQuery}
+          autoCorrect={false}
+          clearButtonMode="while-editing"
+        />
+      </View>
 
       {hidden === null ? null : visibleCommunes.length === 0 ? (
-        <Text style={styles.empty}>
-          {hiddenCount > 0
-            ? "Toutes les communes sont masquées — ouvre le menu ☰ pour en réafficher."
-            : "Aucune zone ne correspond à ta recherche."}
-        </Text>
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyEmoji}>{hiddenCount > 0 ? "🙈" : "🔎"}</Text>
+          <Text style={styles.empty}>
+            {hiddenCount > 0
+              ? "Toutes les communes sont masquées."
+              : "Aucune zone ne correspond à ta recherche."}
+          </Text>
+          {hiddenCount > 0 && (
+            <Pressable style={styles.emptyAction} onPress={showAll}>
+              <Text style={styles.emptyActionText}>Tout réafficher</Text>
+            </Pressable>
+          )}
+        </View>
       ) : (
         <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
           {visibleCommunes.map((commune) => (
@@ -127,6 +170,7 @@ export default function ZonePickerScreen({ onZoneSelected }: Props) {
                 >
                   <View style={styles.cardDot} />
                   <Text style={styles.cardZone}>{item.name}</Text>
+                  <Text style={styles.cardChevron}>›</Text>
                 </Pressable>
               ))}
             </View>
@@ -134,13 +178,15 @@ export default function ZonePickerScreen({ onZoneSelected }: Props) {
         </ScrollView>
       )}
 
-      <Modal visible={menuOpen} animationType="slide" transparent onRequestClose={() => setMenuOpen(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setMenuOpen(false)} />
-        <View style={styles.menuPanel}>
+      <Modal visible={menuVisible} transparent animationType="none" onRequestClose={closeMenu}>
+        <Animated.View style={[styles.modalOverlay, { opacity: backdropOpacity }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeMenu} />
+        </Animated.View>
+        <Animated.View style={[styles.menuPanel, { transform: [{ translateX: drawerX }] }]}>
           <View style={styles.menuHeader}>
-            <Text style={styles.menuTitle}>Communes affichées</Text>
-            <Pressable onPress={() => setMenuOpen(false)} hitSlop={10}>
-              <Text style={styles.menuClose}>Fermer</Text>
+            <Text style={styles.menuTitle}>Communes</Text>
+            <Pressable onPress={closeMenu} hitSlop={10} style={styles.menuCloseBtn}>
+              <Text style={styles.menuCloseIcon}>✕</Text>
             </Pressable>
           </View>
           <Text style={styles.menuHint}>
@@ -154,43 +200,56 @@ export default function ZonePickerScreen({ onZoneSelected }: Props) {
               <Text style={styles.menuActionText}>Tout masquer</Text>
             </Pressable>
           </View>
-          <ScrollView style={styles.menuList}>
+          <ScrollView style={styles.menuList} showsVerticalScrollIndicator={false}>
             {allCommunes.map((commune) => {
               const isVisible = !hidden?.has(commune);
+              const count = zonesByCommune.get(commune)?.length ?? 0;
               return (
-                <View key={commune} style={styles.menuRow}>
-                  <Text style={styles.menuRowText}>{commune}</Text>
+                <Pressable
+                  key={commune}
+                  style={styles.menuRow}
+                  onPress={() => toggleCommune(commune)}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.menuRowText, !isVisible && styles.menuRowTextDim]}>
+                      {commune}
+                    </Text>
+                    <Text style={styles.menuRowCount}>
+                      {count} zone{count !== 1 ? "s" : ""}
+                    </Text>
+                  </View>
                   <Switch
                     value={isVisible}
                     onValueChange={() => toggleCommune(commune)}
-                    trackColor={{ true: "#1FAA59", false: "#ccc" }}
+                    trackColor={{ true: "#1FAA59", false: "#d8d8dc" }}
                   />
-                </View>
+                </Pressable>
               );
             })}
           </ScrollView>
-        </View>
+        </Animated.View>
       </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", paddingTop: 64, paddingHorizontal: 20 },
-  brandRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 20 },
+  container: { flex: 1, backgroundColor: "#fff", paddingTop: 60, paddingHorizontal: 20 },
+  brandRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 18 },
   hamburger: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 13,
     backgroundColor: "#F2F2F7",
     alignItems: "center",
     justifyContent: "center",
   },
-  hamburgerIcon: { fontSize: 20, color: "#1a1a1a" },
+  hamburgerLines: { gap: 4, alignItems: "flex-start" },
+  hamburgerLine: { width: 20, height: 2.4, borderRadius: 2, backgroundColor: "#1a1a1a" },
   hamburgerBadge: {
     position: "absolute",
-    top: -4,
-    right: -4,
+    top: -5,
+    right: -5,
     backgroundColor: "#D8333A",
     borderRadius: 9,
     minWidth: 18,
@@ -198,18 +257,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 3,
+    borderWidth: 2,
+    borderColor: "#fff",
   },
-  hamburgerBadgeText: { color: "#fff", fontSize: 11, fontWeight: "700" },
-  logo: { width: 44, height: 44, borderRadius: 12 },
+  hamburgerBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
+  logo: { width: 44, height: 44, borderRadius: 13 },
   title: { fontSize: 20, fontWeight: "800", color: "#1a1a1a" },
-  subtitle: { fontSize: 12, color: "#777", marginTop: 1 },
+  subtitle: { fontSize: 12, color: "#1FAA59", marginTop: 1, fontWeight: "600" },
+  searchWrap: { position: "relative", marginBottom: 12 },
+  searchIcon: { position: "absolute", left: 14, top: 12, fontSize: 16, color: "#9b9ba1", zIndex: 1 },
   search: {
     backgroundColor: "#F2F2F7",
     borderRadius: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: 38,
     paddingVertical: 12,
     fontSize: 15,
-    marginBottom: 12,
   },
   list: { paddingBottom: 40, gap: 8 },
   sectionHeader: {
@@ -232,26 +294,42 @@ const styles = StyleSheet.create({
   },
   cardPressed: { backgroundColor: "#ECECF0" },
   cardDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#1FAA59" },
-  cardZone: { fontSize: 16, fontWeight: "600", color: "#1a1a1a" },
-  empty: { textAlign: "center", color: "#888", marginTop: 40, fontSize: 14, paddingHorizontal: 20 },
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
+  cardZone: { fontSize: 16, fontWeight: "600", color: "#1a1a1a", flex: 1 },
+  cardChevron: { fontSize: 18, color: "#c0c0c5", fontWeight: "700" },
+  emptyWrap: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 30, gap: 10, marginTop: -60 },
+  emptyEmoji: { fontSize: 40 },
+  empty: { textAlign: "center", color: "#888", fontSize: 14 },
+  emptyAction: { marginTop: 6, backgroundColor: "#1FAA59", paddingVertical: 10, paddingHorizontal: 20, borderRadius: 999 },
+  emptyActionText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
   menuPanel: {
     position: "absolute",
     left: 0,
     top: 0,
     bottom: 0,
-    width: "82%",
-    maxWidth: 340,
+    width: DRAWER_WIDTH,
     backgroundColor: "#fff",
-    paddingTop: 64,
+    paddingTop: 60,
     paddingHorizontal: 20,
     paddingBottom: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    shadowOffset: { width: 4, height: 0 },
   },
   menuHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  menuTitle: { fontSize: 18, fontWeight: "800", color: "#1a1a1a" },
-  menuClose: { fontSize: 14, color: "#1FAA59", fontWeight: "600" },
-  menuHint: { fontSize: 12, color: "#888", marginTop: 8, marginBottom: 12, lineHeight: 17 },
-  menuActionsRow: { flexDirection: "row", gap: 10, marginBottom: 12 },
+  menuTitle: { fontSize: 19, fontWeight: "800", color: "#1a1a1a" },
+  menuCloseBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#F2F2F7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuCloseIcon: { fontSize: 13, color: "#1a1a1a", fontWeight: "700" },
+  menuHint: { fontSize: 12, color: "#888", marginTop: 8, marginBottom: 14, lineHeight: 17 },
+  menuActionsRow: { flexDirection: "row", gap: 10, marginBottom: 10 },
   menuActionBtn: {
     flex: 1,
     backgroundColor: "#F2F2F7",
@@ -259,15 +337,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: "center",
   },
-  menuActionText: { fontSize: 13, fontWeight: "600", color: "#1a1a1a" },
+  menuActionText: { fontSize: 13, fontWeight: "700", color: "#1FAA59" },
   menuList: { flex: 1 },
   menuRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#F0F0F0",
   },
-  menuRowText: { fontSize: 15, color: "#1a1a1a", fontWeight: "500", flex: 1, marginRight: 10 },
+  menuRowText: { fontSize: 15, color: "#1a1a1a", fontWeight: "600" },
+  menuRowTextDim: { color: "#b5b5ba" },
+  menuRowCount: { fontSize: 12, color: "#9b9ba1", marginTop: 2 },
 });
