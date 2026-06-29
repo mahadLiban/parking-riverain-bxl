@@ -67,8 +67,9 @@ function regulationSummary(match: RegulationMatch | null): { title: string; body
   else parts.push("réglementation horaire variable");
   if (z.type === "bleue") parts.push("disque de stationnement requis");
   if (z.maxtime) parts.push(`durée max ${z.maxtime} min`);
-  if (z.freetime) parts.push(`${z.freetime} min gratuites`);
-  if (z.fee) parts.push(`tarif ${z.fee} €/h`);
+  if (z.freetime && z.freetime !== "0") parts.push(`${z.freetime} min gratuites`);
+  if (z.charge60) parts.push(`${z.charge60} € / 1h`);
+  if (z.charge120) parts.push(`${z.charge120} € / 2h`);
 
   return { title: `${prefix}${label}`, body: parts.join(" · ") + " (sans carte riverain)." };
 }
