@@ -2,18 +2,24 @@ import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useState } from "react";
 import { Image, StyleSheet, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { COLORS } from "./components/theme";
+import { TextScaleProvider } from "./contexts/TextScaleContext";
+import { supabase } from "./lib/supabase";
 import AuthScreen from "./screens/AuthScreen";
 import HomeScreen from "./screens/HomeScreen";
+import SettingsScreen from "./screens/SettingsScreen";
+import WelcomeScreen from "./screens/WelcomeScreen";
 import ZonePickerScreen from "./screens/ZonePickerScreen";
-import { supabase } from "./lib/supabase";
 
-type Session = { zoneId: string; username: string };
-type Screen = "loading" | "auth" | "home" | "change-zone";
+type Session = { zoneId: string; username: string; email: string };
+type Screen = "loading" | "welcome" | "login" | "signup" | "home" | "settings" | "change-zone";
 
 export default function App() {
   return (
     <SafeAreaProvider>
-      <AppContent />
+      <TextScaleProvider>
+        <AppContent />
+      </TextScaleProvider>
     </SafeAreaProvider>
   );
 }
@@ -27,7 +33,7 @@ function AppContent() {
       const { data } = await supabase.auth.getSession();
       const user = data.session?.user;
       if (!user) {
-        setScreen("auth");
+        setScreen("welcome");
         return;
       }
       const { data: profile, error } = await supabase
@@ -36,16 +42,16 @@ function AppContent() {
         .eq("id", user.id)
         .single();
       if (error || !profile) {
-        setScreen("auth");
+        setScreen("welcome");
         return;
       }
-      setSession({ zoneId: profile.zone_id, username: profile.username });
+      setSession({ zoneId: profile.zone_id, username: profile.username, email: user.email ?? "" });
       setScreen("home");
     })();
   }, []);
 
-  const handleAuthenticated = (zoneId: string, username: string) => {
-    setSession({ zoneId, username });
+  const handleAuthenticated = (zoneId: string, username: string, email: string) => {
+    setSession({ zoneId, username, email });
     setScreen("home");
   };
 
@@ -62,23 +68,61 @@ function AppContent() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setSession(null);
-    setScreen("auth");
+    setScreen("welcome");
   };
 
   if (screen === "loading") {
     return (
       <View style={styles.splash}>
         <Image source={require("./assets/icon.png")} style={styles.splashLogo} />
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
       </View>
     );
   }
 
-  if (screen === "auth" || !session) {
+  if (screen === "welcome") {
     return (
       <>
-        <AuthScreen onAuthenticated={handleAuthenticated} />
-        <StatusBar style="light" />
+        <WelcomeScreen onStart={() => setScreen("signup")} onLogin={() => setScreen("login")} />
+        <StatusBar style="dark" />
+      </>
+    );
+  }
+
+  if (screen === "login" || screen === "signup") {
+    return (
+      <>
+        <AuthScreen
+          initialMode={screen === "signup" ? "signup-form" : "login"}
+          onAuthenticated={handleAuthenticated}
+          onBack={() => setScreen("welcome")}
+        />
+        <StatusBar style="dark" />
+      </>
+    );
+  }
+
+  if (!session) {
+    return (
+      <>
+        <WelcomeScreen onStart={() => setScreen("signup")} onLogin={() => setScreen("login")} />
+        <StatusBar style="dark" />
+      </>
+    );
+  }
+
+  if (screen === "settings") {
+    return (
+      <>
+        <SettingsScreen
+          username={session.username}
+          email={session.email}
+          zoneId={session.zoneId}
+          onBack={() => setScreen("home")}
+          onChangeZone={() => setScreen("change-zone")}
+          onLogout={handleLogout}
+        />
+        <StatusBar style="dark" />
       </>
     );
   }
@@ -88,14 +132,14 @@ function AppContent() {
       <>
         <ZonePickerScreen
           onZoneSelected={handleZoneUpdated}
-          currentZoneId={session?.zoneId}
+          currentZoneId={session.zoneId}
           headerOverride={{
             title: "Changer de zone",
             subtitle: "Choisis ta nouvelle zone riverain",
-            onBack: () => setScreen("home"),
+            onBack: () => setScreen("settings"),
           }}
         />
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
       </>
     );
   }
@@ -105,15 +149,14 @@ function AppContent() {
       <HomeScreen
         zoneId={session.zoneId}
         username={session.username}
-        onChangeZone={() => setScreen("change-zone")}
-        onLogout={handleLogout}
+        onOpenSettings={() => setScreen("settings")}
       />
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  splash: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#08080D" },
+  splash: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.bg },
   splashLogo: { width: 96, height: 96, borderRadius: 24 },
 });

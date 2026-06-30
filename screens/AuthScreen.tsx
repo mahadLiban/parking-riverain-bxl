@@ -3,7 +3,6 @@ import { useFonts } from "expo-font";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -13,19 +12,23 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Defs, RadialGradient, Rect, Stop, Svg } from "react-native-svg";
-import { getZoneById } from "../data/zones";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { COLORS } from "../components/theme";
 import { supabase } from "../lib/supabase";
 import ZonePickerScreen from "./ZonePickerScreen";
 
-type Props = { onAuthenticated: (zoneId: string, username: string) => void };
+type Props = {
+  initialMode?: "login" | "signup-form";
+  onAuthenticated: (zoneId: string, username: string, email: string) => void;
+  onBack: () => void;
+};
+
 type Mode = "login" | "signup-form" | "signup-zone";
 
-const GREEN = "#22D17E";
-
-export default function AuthScreen({ onAuthenticated }: Props) {
+export default function AuthScreen({ initialMode = "login", onAuthenticated, onBack }: Props) {
   const [fontsLoaded] = useFonts({ Manrope_400Regular, Manrope_600SemiBold, Manrope_700Bold, Manrope_800ExtraBold });
-  const [mode, setMode] = useState<Mode>("login");
+  const insets = useSafeAreaInsets();
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -47,7 +50,7 @@ export default function AuthScreen({ onAuthenticated }: Props) {
     const { data: profile, error: profileError } = await supabase.from("profiles").select("zone_id, username").eq("id", data.user.id).single();
     setLoading(false);
     if (profileError || !profile) { setError("Profil introuvable pour ce compte."); return; }
-    onAuthenticated(profile.zone_id, profile.username);
+    onAuthenticated(profile.zone_id, profile.username, data.user.email ?? "");
   };
 
   const goToZoneStep = () => {
@@ -77,7 +80,7 @@ export default function AuthScreen({ onAuthenticated }: Props) {
       );
       return;
     }
-    onAuthenticated(zoneId, username.trim());
+    onAuthenticated(zoneId, username.trim(), email.trim());
   };
 
   if (mode === "signup-zone") {
@@ -85,11 +88,16 @@ export default function AuthScreen({ onAuthenticated }: Props) {
       <View style={{ flex: 1 }}>
         <ZonePickerScreen
           onZoneSelected={handleSignupWithZone}
-          headerOverride={{ title: "Dernière étape", subtitle: "Choisis la zone de ta carte riverain", onBack: () => setMode("signup-form") }}
+          headerOverride={{
+            title: "Choisis ta zone riverain",
+            subtitle: "",
+            onBack: () => setMode("signup-form"),
+            step: { current: 2, total: 3 },
+          }}
         />
         {loading && (
           <View style={styles.overlay}>
-            <ActivityIndicator size="large" color={GREEN} />
+            <ActivityIndicator size="large" color={COLORS.green} />
           </View>
         )}
       </View>
@@ -99,35 +107,24 @@ export default function AuthScreen({ onAuthenticated }: Props) {
   const isSignup = mode === "signup-form";
 
   return (
-    <View style={styles.root}>
-      {/* Aurora */}
-      <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="none" width="100%" height="100%">
-        <Defs>
-          <RadialGradient id="a1" cx="20%" cy="15%" r="50%">
-            <Stop offset="0%" stopColor="#6B21C8" stopOpacity="0.5" />
-            <Stop offset="100%" stopColor="#6B21C8" stopOpacity="0" />
-          </RadialGradient>
-          <RadialGradient id="a2" cx="80%" cy="85%" r="45%">
-            <Stop offset="0%" stopColor="#0051CC" stopOpacity="0.35" />
-            <Stop offset="100%" stopColor="#0051CC" stopOpacity="0" />
-          </RadialGradient>
-          <RadialGradient id="a3" cx="60%" cy="50%" r="35%">
-            <Stop offset="0%" stopColor="#00C9A7" stopOpacity="0.2" />
-            <Stop offset="100%" stopColor="#00C9A7" stopOpacity="0" />
-          </RadialGradient>
-        </Defs>
-        <Rect width="100%" height="100%" fill="url(#a1)" />
-        <Rect width="100%" height="100%" fill="url(#a2)" />
-        <Rect width="100%" height="100%" fill="url(#a3)" />
-      </Svg>
+    <View style={[styles.root, { paddingTop: insets.top + 16 }]}>
+      <View style={styles.header}>
+        <Pressable style={styles.backBtn} onPress={mode === "login" ? onBack : onBack} hitSlop={10}>
+          <Text style={styles.backBtnText}>‹</Text>
+        </Pressable>
+        {isSignup && (
+          <View style={styles.stepWrap}>
+            <Text style={styles.stepLabel}>ÉTAPE 1 SUR 3</Text>
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressBar, { width: "33%" }]} />
+            </View>
+          </View>
+        )}
+      </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <Image source={require("../assets/icon.png")} style={styles.logo} />
-          <Text style={styles.appName}>Riverain BXL</Text>
-          <Text style={styles.tagline}>
-            {isSignup ? "Crée ton compte" : "Content de te revoir 👋"}
-          </Text>
+          <Text style={styles.title}>{isSignup ? "Crée ton compte" : "Connecte-toi"}</Text>
 
           <View style={styles.form}>
             {isSignup && (
@@ -135,8 +132,8 @@ export default function AuthScreen({ onAuthenticated }: Props) {
                 <Text style={styles.label}>Pseudo</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Ton pseudo"
-                  placeholderTextColor="rgba(255,255,255,0.25)"
+                  placeholder="Marie"
+                  placeholderTextColor={COLORS.textMuted}
                   value={username}
                   onChangeText={setUsername}
                   autoCapitalize="none"
@@ -149,8 +146,8 @@ export default function AuthScreen({ onAuthenticated }: Props) {
               <Text style={styles.label}>Email</Text>
               <TextInput
                 style={styles.input}
-                placeholder="ton@email.com"
-                placeholderTextColor="rgba(255,255,255,0.25)"
+                placeholder="marie@email.com"
+                placeholderTextColor={COLORS.textMuted}
                 value={email}
                 onChangeText={setEmail}
                 autoCapitalize="none"
@@ -164,7 +161,7 @@ export default function AuthScreen({ onAuthenticated }: Props) {
               <TextInput
                 style={styles.input}
                 placeholder="••••••••"
-                placeholderTextColor="rgba(255,255,255,0.25)"
+                placeholderTextColor={COLORS.textMuted}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
@@ -175,12 +172,12 @@ export default function AuthScreen({ onAuthenticated }: Props) {
             {error && <Text style={styles.error}>{error}</Text>}
 
             <Pressable
-              style={({ pressed }) => [styles.submitBtn, pressed && { opacity: 0.85 }]}
+              style={({ pressed }) => [styles.submitBtn, pressed && { opacity: 0.88 }]}
               onPress={isSignup ? goToZoneStep : handleLogin}
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="#08080D" />
+                <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.submitText}>{isSignup ? "Continuer →" : "Se connecter"}</Text>
               )}
@@ -189,7 +186,7 @@ export default function AuthScreen({ onAuthenticated }: Props) {
 
           <Pressable onPress={() => { setError(null); setMode(isSignup ? "login" : "signup-form"); }}>
             <Text style={styles.switchText}>
-              {isSignup ? "Déjà un compte ? Se connecter" : "Pas encore de compte ? S'inscrire"}
+              {isSignup ? "Déjà inscrit ? Se connecter" : "Pas encore de compte ? S'inscrire"}
             </Text>
           </Pressable>
         </ScrollView>
@@ -199,42 +196,53 @@ export default function AuthScreen({ onAuthenticated }: Props) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#08080D" },
-  scroll: { flexGrow: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 6 },
+  root: { flex: 1, backgroundColor: COLORS.bg, paddingHorizontal: 24 },
+  header: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 8 },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  backBtnText: { fontSize: 22, color: COLORS.text, fontFamily: "Manrope_700Bold", marginTop: -2 },
+  stepWrap: { flex: 1, gap: 6 },
+  stepLabel: { fontSize: 11, fontFamily: "Manrope_700Bold", color: COLORS.green, letterSpacing: 0.6 },
+  progressTrack: { height: 4, backgroundColor: COLORS.border, borderRadius: 2, overflow: "hidden" },
+  progressBar: { height: 4, backgroundColor: COLORS.green, borderRadius: 2 },
 
-  logo: { width: 80, height: 80, borderRadius: 22, marginBottom: 8 },
-  appName: { fontSize: 26, fontFamily: "Manrope_800ExtraBold", color: "#fff", letterSpacing: -0.3 },
-  tagline: { fontSize: 14.5, fontFamily: "Manrope_600SemiBold", color: "rgba(255,255,255,0.4)", marginBottom: 28 },
+  scroll: { paddingTop: 16, paddingBottom: 40 },
+  title: { fontSize: 25, fontFamily: "Manrope_800ExtraBold", color: COLORS.text, marginBottom: 24 },
 
-  form: { width: "100%", maxWidth: 360, gap: 14 },
+  form: { gap: 16 },
   field: { gap: 7 },
-  label: { fontSize: 12.5, fontFamily: "Manrope_700Bold", color: "rgba(255,255,255,0.55)", letterSpacing: 0.3 },
+  label: { fontSize: 13, fontFamily: "Manrope_700Bold", color: COLORS.text },
   input: {
-    backgroundColor: "rgba(255,255,255,0.07)",
+    backgroundColor: COLORS.inputBg,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: COLORS.border,
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 15,
+    minHeight: 54,
+    fontSize: 15.5,
     fontFamily: "Manrope_400Regular",
-    color: "#fff",
+    color: COLORS.text,
   },
-  error: { color: "#FF3B5C", fontFamily: "Manrope_600SemiBold", fontSize: 13, textAlign: "center" },
+  error: { color: COLORS.red, fontFamily: "Manrope_600SemiBold", fontSize: 13, textAlign: "center" },
   submitBtn: {
-    backgroundColor: "#22D17E",
-    borderRadius: 999,
-    paddingVertical: 16,
+    backgroundColor: COLORS.green,
+    borderRadius: 14,
+    minHeight: 58,
     alignItems: "center",
+    justifyContent: "center",
     marginTop: 4,
-    shadowColor: "#22D17E",
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 6 },
   },
-  submitText: { color: "#08080D", fontFamily: "Manrope_800ExtraBold", fontSize: 15.5 },
+  submitText: { color: "#fff", fontFamily: "Manrope_800ExtraBold", fontSize: 16 },
 
-  switchText: { color: "rgba(255,255,255,0.4)", fontFamily: "Manrope_600SemiBold", fontSize: 13, marginTop: 16 },
+  switchText: { color: COLORS.textMuted, fontFamily: "Manrope_600SemiBold", fontSize: 13.5, textAlign: "center", marginTop: 22 },
 
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.35)", alignItems: "center", justifyContent: "center" },
 });
