@@ -1,6 +1,7 @@
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useState } from "react";
 import { Image, StyleSheet, View } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import AuthScreen from "./screens/AuthScreen";
 import HomeScreen from "./screens/HomeScreen";
 import ZonePickerScreen from "./screens/ZonePickerScreen";
@@ -10,6 +11,14 @@ type Session = { zoneId: string; username: string };
 type Screen = "loading" | "auth" | "home" | "change-zone";
 
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AppContent />
+    </SafeAreaProvider>
+  );
+}
+
+function AppContent() {
   const [screen, setScreen] = useState<Screen>("loading");
   const [session, setSession] = useState<Session | null>(null);
 
@@ -60,6 +69,7 @@ export default function App() {
     return (
       <View style={styles.splash}>
         <Image source={require("./assets/icon.png")} style={styles.splashLogo} />
+        <StatusBar style="light" />
       </View>
     );
   }
@@ -68,7 +78,7 @@ export default function App() {
     return (
       <>
         <AuthScreen onAuthenticated={handleAuthenticated} />
-        <StatusBar style="auto" />
+        <StatusBar style="light" />
       </>
     );
   }
@@ -78,13 +88,14 @@ export default function App() {
       <>
         <ZonePickerScreen
           onZoneSelected={handleZoneUpdated}
+          currentZoneId={session?.zoneId}
           headerOverride={{
             title: "Changer de zone",
             subtitle: "Choisis ta nouvelle zone riverain",
             onBack: () => setScreen("home"),
           }}
         />
-        <StatusBar style="auto" />
+        <StatusBar style="light" />
       </>
     );
   }
@@ -97,12 +108,12 @@ export default function App() {
         onChangeZone={() => setScreen("change-zone")}
         onLogout={handleLogout}
       />
-      <StatusBar style="auto" />
+      <StatusBar style="light" />
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  splash: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#1FAA59" },
+  splash: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#08080D" },
   splashLogo: { width: 96, height: 96, borderRadius: 24 },
 });

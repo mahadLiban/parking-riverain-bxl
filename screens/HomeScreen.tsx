@@ -2,6 +2,7 @@ import { Manrope_400Regular, Manrope_600SemiBold, Manrope_700Bold, Manrope_800Ex
 import { BlurView } from "expo-blur";
 import { useFonts } from "expo-font";
 import * as Haptics from "expo-haptics";
+import * as Linking from "expo-linking";
 import * as Location from "expo-location";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -14,6 +15,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Defs, RadialGradient, Rect, Stop, Svg } from "react-native-svg";
 import { CheckIcon, CrossIcon, LogoutIcon, PinIcon, RefreshIcon } from "../components/icons";
 import ParkingTimerCard from "../components/ParkingTimerCard";
@@ -123,11 +125,15 @@ export default function HomeScreen({ zoneId, username, onChangeZone, onLogout }:
   const [status, setStatus] = useState<Status>({ kind: "loading" });
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const zone = getZoneById(zoneId);
+  const insets = useSafeAreaInsets();
 
   const scale = useRef(new Animated.Value(0.85)).current;
   const fade = useRef(new Animated.Value(0)).current;
   const slideUp = useRef(new Animated.Value(20)).current;
   const tintOpacity = useRef(new Animated.Value(0)).current;
+  const fade2 = useRef(new Animated.Value(0)).current;
+  const fade3 = useRef(new Animated.Value(0)).current;
+  const fade4 = useRef(new Animated.Value(0)).current;
   const pressScale = useRef(new Animated.Value(1)).current;
   const pulseScale = useRef(new Animated.Value(1)).current;
   const pulseOpacity = useRef(new Animated.Value(0)).current;
@@ -188,15 +194,21 @@ export default function HomeScreen({ zoneId, username, onChangeZone, onLogout }:
   useEffect(() => {
     if (status.kind === "result") {
       scale.setValue(0.82);
+      fade2.setValue(0);
+      fade3.setValue(0);
+      fade4.setValue(0);
       Animated.parallel([
         Animated.spring(scale, { toValue: 1, friction: 6, tension: 55, useNativeDriver: true }),
         Animated.timing(tintOpacity, { toValue: 1, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
         Animated.timing(fade, { toValue: 1, duration: 480, delay: 150, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
         Animated.timing(slideUp, { toValue: 0, duration: 480, delay: 150, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(fade2, { toValue: 1, duration: 420, delay: 230, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(fade3, { toValue: 1, duration: 420, delay: 310, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(fade4, { toValue: 1, duration: 420, delay: 390, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
       ]).start();
       startPulse();
     }
-  }, [status.kind, scale, fade, slideUp, tintOpacity, startPulse]);
+  }, [status.kind, scale, fade, slideUp, tintOpacity, fade2, fade3, fade4, startPulse]);
 
   const handlePressIn = () => Animated.spring(pressScale, { toValue: 0.93, useNativeDriver: true, speed: 30 }).start();
   const handlePressOut = () => Animated.spring(pressScale, { toValue: 1, useNativeDriver: true, speed: 20 }).start();
@@ -242,7 +254,7 @@ export default function HomeScreen({ zoneId, username, onChangeZone, onLogout }:
         />
       )}
 
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: Math.max(insets.top, 20) + 16, paddingBottom: insets.bottom }]}>
         {/* Header */}
         <View style={styles.header}>
           <GlassCard style={styles.zoneChip}>
@@ -325,6 +337,17 @@ export default function HomeScreen({ zoneId, username, onChangeZone, onLogout }:
               </View>
             </Pressable>
           </Animated.View>
+
+          {status.kind === "permission-denied" && (
+            <Pressable style={styles.settingsBtn} onPress={() => Linking.openSettings()}>
+              <Text style={styles.settingsBtnText}>Ouvrir les réglages →</Text>
+            </Pressable>
+          )}
+          {status.kind === "error" && (
+            <Pressable style={styles.settingsBtn} onPress={checkPosition}>
+              <Text style={styles.settingsBtnText}>Réessayer →</Text>
+            </Pressable>
+          )}
         </View>
 
         {/* Scrollable cards */}
@@ -374,7 +397,7 @@ export default function HomeScreen({ zoneId, username, onChangeZone, onLogout }:
           {isResult && (() => {
             const reg = regulationSummary(status.regulation);
             return (
-              <Animated.View style={[styles.cardWrap, { opacity: fade, transform: [{ translateY: slideUp }] }]}>
+              <Animated.View style={[styles.cardWrap, { opacity: fade2, transform: [{ translateY: slideUp }] }]}>
                 <GlassCard style={styles.infoCard}>
                   <View style={[styles.cardAccentBar, { backgroundColor: "rgba(255,255,255,0.25)" }]} />
                   <View style={styles.cardBody}>
@@ -389,14 +412,14 @@ export default function HomeScreen({ zoneId, username, onChangeZone, onLogout }:
 
           {/* Timer card */}
           {isResult && status.regulation && (
-            <Animated.View style={[styles.cardWrap, { opacity: fade, transform: [{ translateY: slideUp }] }]}>
+            <Animated.View style={[styles.cardWrap, { opacity: fade3, transform: [{ translateY: slideUp }] }]}>
               <ParkingTimerCard zone={status.regulation.zone} />
             </Animated.View>
           )}
 
           {/* Map */}
           {isResult && zone && (
-            <Animated.View style={[styles.cardWrap, { opacity: fade, transform: [{ translateY: slideUp }] }]}>
+            <Animated.View style={[styles.cardWrap, { opacity: fade4, transform: [{ translateY: slideUp }] }]}>
               <RegulationMap
                 position={status.position}
                 residentPolygon={zone.polygon}
@@ -426,7 +449,7 @@ const RING = 250;
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#08080D" },
-  container: { flex: 1, paddingHorizontal: 20, paddingTop: 56 },
+  container: { flex: 1, paddingHorizontal: 20 },
 
   // Header
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
@@ -457,7 +480,16 @@ const styles = StyleSheet.create({
   greeting: { color: "rgba(255,255,255,0.45)", fontFamily: "Manrope_600SemiBold", fontSize: 13, marginTop: 12, marginBottom: 4 },
 
   // Button
-  buttonWrap: { alignItems: "center", justifyContent: "center", paddingVertical: 30 },
+  buttonWrap: { alignItems: "center", justifyContent: "center", paddingVertical: 30, gap: 18 },
+  settingsBtn: {
+    paddingVertical: 11,
+    paddingHorizontal: 20,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  settingsBtnText: { fontSize: 13.5, fontFamily: "Manrope_700Bold", color: "rgba(255,255,255,0.8)" },
   pulseRing: {
     position: "absolute",
     width: RING + 24,

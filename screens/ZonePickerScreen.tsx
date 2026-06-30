@@ -16,14 +16,15 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { BackIcon, ChevronIcon, CloseIcon, MenuIcon, SearchIcon } from "../components/icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BackIcon, CheckIcon, ChevronIcon, CloseIcon, MenuIcon, SearchIcon } from "../components/icons";
 import { RESIDENT_ZONES, ResidentZone } from "../data/zones";
 import { getCollapsedCommunes, setCollapsedCommunes } from "../storage/collapsedCommunes";
 import { getHiddenCommunes, setHiddenCommunes } from "../storage/hiddenCommunes";
 import { setSelectedZoneId } from "../storage/selectedZone";
 
 type HeaderOverride = { title: string; subtitle: string; onBack: () => void };
-type Props = { onZoneSelected: (zoneId: string) => void; headerOverride?: HeaderOverride };
+type Props = { onZoneSelected: (zoneId: string) => void; headerOverride?: HeaderOverride; currentZoneId?: string };
 
 const DRAWER_WIDTH = 300;
 const GREEN = "#22D17E";
@@ -33,8 +34,9 @@ function DrawerPanel({ children, style }: { children: React.ReactNode; style?: o
   return <BlurView intensity={30} tint="dark" style={[styles.drawer, style]}>{children}</BlurView>;
 }
 
-export default function ZonePickerScreen({ onZoneSelected, headerOverride }: Props) {
+export default function ZonePickerScreen({ onZoneSelected, headerOverride, currentZoneId }: Props) {
   const [fontsLoaded] = useFonts({ Manrope_400Regular, Manrope_600SemiBold, Manrope_700Bold, Manrope_800ExtraBold });
+  const insets = useSafeAreaInsets();
   const [query, setQuery] = useState("");
   const [hidden, setHidden] = useState<Set<string> | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -114,7 +116,7 @@ export default function ZonePickerScreen({ onZoneSelected, headerOverride }: Pro
   if (!fontsLoaded) return <View style={styles.container} />;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: Math.max(insets.top, 24) + 16, paddingBottom: insets.bottom }]}>
       {/* Header */}
       <View style={styles.brandRow}>
         {headerOverride ? (
@@ -183,17 +185,20 @@ export default function ZonePickerScreen({ onZoneSelected, headerOverride }: Pro
                     <ChevronIcon size={13} color={GREEN} />
                   </Animated.View>
                 </Pressable>
-                {isOpen && zones.map((item) => (
-                  <Pressable
-                    key={item.id}
-                    style={({ pressed }) => [styles.zoneRow, pressed && styles.zoneRowPressed]}
-                    onPress={() => handleSelect(item.id)}
-                  >
-                    <View style={styles.zoneDot} />
-                    <Text style={styles.zoneName}>{item.name}</Text>
-                    <ChevronIcon size={14} color="rgba(255,255,255,0.3)" />
-                  </Pressable>
-                ))}
+                {isOpen && zones.map((item) => {
+                  const isCurrent = item.id === currentZoneId;
+                  return (
+                    <Pressable
+                      key={item.id}
+                      style={({ pressed }) => [styles.zoneRow, isCurrent && styles.zoneRowActive, pressed && styles.zoneRowPressed]}
+                      onPress={() => handleSelect(item.id)}
+                    >
+                      <View style={[styles.zoneDot, isCurrent && { backgroundColor: GREEN }]} />
+                      <Text style={[styles.zoneName, isCurrent && { color: GREEN }]}>{item.name}</Text>
+                      {isCurrent ? <CheckIcon size={15} /> : <ChevronIcon size={14} color="rgba(255,255,255,0.3)" />}
+                    </Pressable>
+                  );
+                })}
               </View>
             );
           })}
@@ -250,7 +255,7 @@ export default function ZonePickerScreen({ onZoneSelected, headerOverride }: Pro
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#08080D", paddingTop: 60, paddingHorizontal: 20 },
+  container: { flex: 1, backgroundColor: "#08080D", paddingHorizontal: 20 },
 
   brandRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 20 },
   iconBtn: {
@@ -320,6 +325,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.07)",
   },
   zoneRowPressed: { backgroundColor: "rgba(255,255,255,0.09)" },
+  zoneRowActive: { backgroundColor: "rgba(34,209,126,0.1)", borderColor: "rgba(34,209,126,0.35)" },
   zoneDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: GREEN },
   zoneName: { fontSize: 15, fontFamily: "Manrope_600SemiBold", color: "#fff", flex: 1 },
 
