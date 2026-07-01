@@ -1,6 +1,6 @@
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useState } from "react";
-import { Image, StyleSheet, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { COLORS } from "./components/theme";
 import { TextScaleProvider } from "./contexts/TextScaleContext";
@@ -16,13 +16,32 @@ import { hasSeenOnboarding, markOnboardingDone } from "./storage/onboarding";
 type Session = { zoneId: string; username: string; email: string };
 type Screen = "loading" | "onboarding" | "welcome" | "login" | "signup" | "home" | "settings" | "change-zone";
 
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: Error | null }> {
+  constructor(props: any) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <View style={{ flex: 1, backgroundColor: "#F2F0EA", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <Text style={{ fontSize: 16, color: "#C13B3B", fontWeight: "bold", marginBottom: 12 }}>Erreur application</Text>
+          <Text style={{ fontSize: 12, color: "#333", textAlign: "center" }}>{this.state.error.message}</Text>
+          <Text style={{ fontSize: 10, color: "#888", marginTop: 12, textAlign: "center" }}>{this.state.error.stack?.slice(0, 300)}</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <TextScaleProvider>
-        <AppContent />
-      </TextScaleProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <TextScaleProvider>
+          <AppContent />
+        </TextScaleProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
 
