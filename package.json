@@ -36,7 +36,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "build:web": "expo export --platform web --output-dir dist --clear && touch dist/.nojekyll && cp assets/icon.png dist/apple-touch-icon.png",
+    "build:web": "expo export --platform web --output-dir dist --clear && touch dist/.nojekyll && cp assets/icon.png dist/apple-touch-icon.png && mkdir -p dist/static/js && cp dist/_expo/static/js/web/*.js dist/static/js/bundle.js && node -e \"const fs=require('fs');const h=fs.readFileSync('dist/index.html','utf8');fs.writeFileSync('dist/index.html',h.replace(/src=\\\".*_expo.*\\.js\\\"/,'src=\\\"/parking-riverain-bxl/static/js/bundle.js\\\"'))\"",
     "deploy": "npm run build:web && git checkout --orphan gh-pages-tmp && git --work-tree=dist add --all && git --work-tree=dist commit -m 'Deploy' && git push origin HEAD:gh-pages --force && git checkout -f main && git branch -D gh-pages-tmp"
   },
   "private": true
