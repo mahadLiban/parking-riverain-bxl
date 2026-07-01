@@ -4,7 +4,7 @@ import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
 import * as Location from "expo-location";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, AppState, AppStateStatus, Easing, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CheckIcon, CrossIcon, PinIcon, RefreshIcon } from "../components/icons";
 import { COLORS } from "../components/theme";
@@ -12,6 +12,7 @@ import { findRegulationZone, RegulationMatch } from "../data/regulationZones";
 import { getZoneById } from "../data/zones";
 import { useTextScale } from "../contexts/TextScaleContext";
 import { getLastResult, setLastResult } from "../storage/lastResult";
+import { pushHistory } from "../storage/history";
 import { isPointInPolygon } from "../utils/geo";
 import DetailsScreen from "./DetailsScreen";
 import TimerScreen from "./TimerScreen";
@@ -27,6 +28,8 @@ type Status =
   | { kind: "permission-denied" }
   | { kind: "error"; message: string }
   | { kind: "result"; inside: boolean; accuracy: number | null; regulation: RegulationMatch | null; position: { latitude: number; longitude: number }; stale?: boolean };
+
+const AUTO_REFRESH_MS = 3 * 60 * 1000; // 3 min
 
 function formatTime(date: Date) {
   return date.toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit" });
@@ -49,6 +52,40 @@ function Spinner() {
   return <Animated.View style={[styles.spinner, { transform: [{ rotate }] }]} />;
 }
 
+function RegLabel({ regulation }: { regulation: RegulationMatch | null }) {
+  if (!regulation) return null;
+  const z = regulation.zone;
+  const label = z.type === "gratuit" ? "Gratuit" : z.type === "reserve-riverain" ? "Réservé riverains" : z.typeLabel ?? z.type;
+  if (!label) return null;
+  const isPaid = z.type !== "gratuit" && z.type !== "reserve-riverain" && z.type !== "poids-lourds";
+  return (
+    <View style={[regLabelStyles.chip, isPaid && regLabelStyles.chipPaid]}>
+      <Text style={[regLabelStyles.text, isPaid && regLabelStyles.textPaid]}>{label}</Text>
+    </View>
+  );
+}
+
+const regLabelStyles = StyleSheet.create({
+  chip: { marginTop: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: COLORS.greenBg, alignSelf: "flex-start" },
+  chipPaid: { backgroundColor: "#FBF1D8" },
+  text: { fontSize: 11, fontFamily: "Manrope_700Bold", color: COLORS.greenDark },
+  textPaid: { color: "#7A5A0A" },
+});
+
+function SlideIn({ children, visible }: { children: React.ReactNode; visible: boolean }) {
+  const translateY = useRef(new Animated.Value(visible ? 0 : 50)).current;
+  const opacity = useRef(new Animated.Value(visible ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(translateY, { toValue: visible ? 0 : 50, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: visible ? 1 : 0, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start();
+  }, [visible]);
+
+  return <Animated.View style={{ flex: 1, opacity, transform: [{ translateY }] }}>{children}</Animated.View>;
+}
+
 export default function HomeScreen({ zoneId, username, onOpenSettings }: Props) {
   const [fontsLoaded] = useFonts({ Manrope_400Regular, Manrope_600SemiBold, Manrope_700Bold, Manrope_800ExtraBold });
   const insets = useSafeAreaInsets();
@@ -59,10 +96,12 @@ export default function HomeScreen({ zoneId, username, onOpenSettings }: Props) 
   const zone = getZoneById(zoneId);
 
   const fade = useRef(new Animated.Value(0)).current;
+  const autoRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const checkPosition = useCallback(async () => {
     setStatus({ kind: "loading" });
     fade.setValue(0);
+    if (autoRefreshTimer.current) clearTimeout(autoRefreshTimer.current);
 
     const { status: permStatus } = await Location.requestForegroundPermissionsAsync();
     if (permStatus !== "granted") { setStatus({ kind: "permission-denied" }); return; }
@@ -74,9 +113,18 @@ export default function HomeScreen({ zoneId, username, onOpenSettings }: Props) 
       const inside = isPointInPolygon(coords, zone.polygon);
       const regulation = findRegulationZone(coords);
       setStatus({ kind: "result", inside, accuracy: position.coords.accuracy ?? null, regulation, position: coords });
-      setLastChecked(new Date());
+      const now = new Date();
+      setLastChecked(now);
       hapticFeedback(inside ? "success" : "warning");
       setLastResult({ inside, regulation, checkedAt: Date.now(), latitude: coords.latitude, longitude: coords.longitude }).catch(() => {});
+      pushHistory({
+        inside,
+        regulationLabel: regulation?.zone.typeLabel ?? regulation?.zone.type ?? null,
+        checkedAt: Date.now(),
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        streetHint: regulation?.zone.municipality ?? null,
+      }).catch(() => {});
     } catch {
       const cached = await getLastResult().catch(() => null);
       if (cached) {
@@ -86,9 +134,27 @@ export default function HomeScreen({ zoneId, username, onOpenSettings }: Props) 
         setStatus({ kind: "error", message: "Impossible d'obtenir ta position." });
       }
     }
+
+    // schedule next auto-refresh
+    autoRefreshTimer.current = setTimeout(checkPosition, AUTO_REFRESH_MS);
   }, [zone, fade]);
 
   useEffect(() => { checkPosition(); }, [checkPosition]);
+
+  // pause auto-refresh when app goes to background
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
+      if (state === "active") {
+        checkPosition();
+      } else {
+        if (autoRefreshTimer.current) clearTimeout(autoRefreshTimer.current);
+      }
+    });
+    return () => {
+      sub.remove();
+      if (autoRefreshTimer.current) clearTimeout(autoRefreshTimer.current);
+    };
+  }, [checkPosition]);
 
   useEffect(() => {
     if (status.kind === "result") {
@@ -102,22 +168,26 @@ export default function HomeScreen({ zoneId, username, onOpenSettings }: Props) 
 
   if (isResult && view === "details" && zone) {
     return (
-      <DetailsScreen
-        inside={status.inside}
-        regulation={status.regulation}
-        zone={zone}
-        position={status.position}
-        onBack={() => setView("main")}
-      />
+      <SlideIn visible>
+        <DetailsScreen
+          inside={status.inside}
+          regulation={status.regulation}
+          zone={zone}
+          position={status.position}
+          onBack={() => setView("main")}
+        />
+      </SlideIn>
     );
   }
 
   if (isResult && view === "timer") {
     return (
-      <TimerScreen
-        zone={status.regulation?.zone ?? null}
-        onBack={() => setView("main")}
-      />
+      <SlideIn visible>
+        <TimerScreen
+          zone={status.regulation?.zone ?? null}
+          onBack={() => setView("main")}
+        />
+      </SlideIn>
     );
   }
 
@@ -130,11 +200,21 @@ export default function HomeScreen({ zoneId, username, onOpenSettings }: Props) 
           <View>
             <Text style={styles.zoneCommune}>{zone?.commune?.toUpperCase() ?? "—"}</Text>
             <Text style={styles.zoneName}>{zone?.name ?? "Zone inconnue"}</Text>
+            {isResult && <RegLabel regulation={status.regulation} />}
           </View>
         </View>
-        <Pressable style={styles.settingsBtn} onPress={onOpenSettings} hitSlop={10}>
-          <Text style={styles.settingsBtnText}>Réglages</Text>
-        </Pressable>
+        <View style={styles.headerRight}>
+          <Pressable
+            style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.7 }]}
+            onPress={checkPosition}
+            hitSlop={10}
+          >
+            <RefreshIcon size={16} color={COLORS.text} />
+          </Pressable>
+          <Pressable style={styles.settingsBtn} onPress={onOpenSettings} hitSlop={10}>
+            <Text style={styles.settingsBtnText}>Réglages</Text>
+          </Pressable>
+        </View>
       </View>
 
       <Text style={[styles.greeting, { fontSize: 16 * scale }]}>Bonjour {username} 👋</Text>
@@ -180,7 +260,7 @@ export default function HomeScreen({ zoneId, username, onOpenSettings }: Props) 
               style={[styles.resultCard, status.inside ? styles.resultCardGreen : styles.resultCardRed]}
               onPress={checkPosition}
             >
-              <View style={[styles.resultIconCircle, { backgroundColor: status.inside ? "#fff" : "#fff" }]}>
+              <View style={styles.resultIconCircle}>
                 {status.inside ? <CheckIcon size={36} color={COLORS.green} /> : <CrossIcon size={36} color={COLORS.red} />}
               </View>
               <Text style={[styles.resultBig, { color: status.inside ? COLORS.greenDark : COLORS.redDark, fontSize: 44 * scale }]}>
@@ -196,7 +276,7 @@ export default function HomeScreen({ zoneId, username, onOpenSettings }: Props) 
                 <View style={styles.metaRow}>
                   <RefreshIcon size={11} color={COLORS.textMuted} />
                   <Text style={styles.metaText}>
-                    Vérifié à {formatTime(lastChecked)}{status.accuracy ? ` · ±${Math.round(status.accuracy)} m` : ""}
+                    Vérifié à {formatTime(lastChecked)}{status.accuracy ? ` · ±${Math.round(status.accuracy)} m` : ""} · rafraîchit auto
                   </Text>
                 </View>
               )}
@@ -223,10 +303,17 @@ export default function HomeScreen({ zoneId, username, onOpenSettings }: Props) 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg, paddingHorizontal: 20 },
 
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  zoneChip: { flexDirection: "row", alignItems: "center", gap: 9 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  zoneChip: { flexDirection: "row", alignItems: "flex-start", gap: 9, flex: 1 },
   zoneCommune: { fontSize: 10.5, color: COLORS.textMuted, fontFamily: "Manrope_700Bold", letterSpacing: 0.4 },
   zoneName: { fontSize: 15.5, color: COLORS.text, fontFamily: "Manrope_800ExtraBold", marginTop: 1 },
+
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  iconBtn: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border,
+    alignItems: "center", justifyContent: "center",
+  },
   settingsBtn: {
     paddingVertical: 10,
     paddingHorizontal: 16,
@@ -268,6 +355,7 @@ const styles = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: 38,
+    backgroundColor: "#fff",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 18,

@@ -7,12 +7,14 @@ import { TextScaleProvider } from "./contexts/TextScaleContext";
 import { supabase } from "./lib/supabase";
 import AuthScreen from "./screens/AuthScreen";
 import HomeScreen from "./screens/HomeScreen";
+import OnboardingScreen from "./screens/OnboardingScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import WelcomeScreen from "./screens/WelcomeScreen";
 import ZonePickerScreen from "./screens/ZonePickerScreen";
+import { hasSeenOnboarding, markOnboardingDone } from "./storage/onboarding";
 
 type Session = { zoneId: string; username: string; email: string };
-type Screen = "loading" | "welcome" | "login" | "signup" | "home" | "settings" | "change-zone";
+type Screen = "loading" | "onboarding" | "welcome" | "login" | "signup" | "home" | "settings" | "change-zone";
 
 export default function App() {
   return (
@@ -50,9 +52,10 @@ function AppContent() {
     })();
   }, []);
 
-  const handleAuthenticated = (zoneId: string, username: string, email: string) => {
+  const handleAuthenticated = async (zoneId: string, username: string, email: string) => {
     setSession({ zoneId, username, email });
-    setScreen("home");
+    const seen = await hasSeenOnboarding();
+    setScreen(seen ? "home" : "onboarding");
   };
 
   const handleZoneUpdated = async (zoneId: string) => {
@@ -84,6 +87,15 @@ function AppContent() {
     return (
       <>
         <WelcomeScreen onStart={() => setScreen("signup")} onLogin={() => setScreen("login")} />
+        <StatusBar style="dark" />
+      </>
+    );
+  }
+
+  if (screen === "onboarding") {
+    return (
+      <>
+        <OnboardingScreen onDone={async () => { await markOnboardingDone(); setScreen("home"); }} />
         <StatusBar style="dark" />
       </>
     );
